@@ -24,7 +24,7 @@ jobs:
         run: npm ci
 
   run-tests:
-    # needs: build-code
+    needs: build-code
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -41,14 +41,17 @@ jobs:
       - name: Run tests
         run: npm test  
    
-  # build-dockerfile:
-  #   needs: build-code
-  #   runs-on: ubuntu-latest
+  build-dockerfile:
+    needs: run-tests
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-  #     - name: Build Docker image
-  #       run: docker build -t random-generator .      
+      - name: Check Dockerfile
+        run: docker build --check -t random-generator .
+        
+      - name: Build Docker image
+        run: docker build -t random-generator . 
 
