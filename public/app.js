@@ -10,19 +10,6 @@ const formatDate = (value) => {
   return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 };
 
-const renderHistory = (generations) => {
-  historyBody.replaceChildren();
-
-  if (!generations.length) {
-    const row = document.createElement('tr');
-    row.className = 'history-empty';
-    const cell = document.createElement('td');
-    cell.colSpan = 3;
-    cell.textContent = 'No generations yet. Try one of the generators above.';
-    row.append(cell);
-    historyBody.append(row);
-    return;
-  }
 
   generations.forEach((generation) => {
     const row = document.createElement('tr');
