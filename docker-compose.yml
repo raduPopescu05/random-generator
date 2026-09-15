@@ -17,7 +17,7 @@ services:
 
   api:
     build: .
-    image: random-generator-api:latest
+    image: ${API_IMAGE:-random-generator-api:latest}
     expose:
       - "3000"
     environment:
@@ -40,7 +40,7 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    image: random-generator-web:latest
+    image: ${WEB_IMAGE:-random-generator-web:latest}
     ports:
       - "3000:80"
     depends_on:

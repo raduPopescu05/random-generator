@@ -6,17 +6,17 @@ on:
   pull_request:
 
 jobs:
-  build-test-images:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -35,9 +35,6 @@ jobs:
         with:
           dockerfile: frontend/Dockerfile
 
-      - name: Validate Compose configuration
-        run: docker compose config --quiet
-
       - name: Check API Dockerfile
         run: docker build --check -t random-generator-api:check .
 
@@ -49,3 +46,83 @@ jobs:
 
       - name: Build frontend image
         run: docker build -t random-generator-web:${{ github.sha }} -f frontend/Dockerfile .
+
+      - name: Save Docker images
+        run: docker save -o docker-images.tar random-generator-api:${{ github.sha }} random-generator-web:${{ github.sha }}
+
+      - name: Upload Docker images
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: docker-images.tar
+
+  compose-start:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    env:
+      API_IMAGE: random-generator-api:${{ github.sha }}
+      WEB_IMAGE: random-generator-web:${{ github.sha }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Download Docker images
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+
+      - name: Load Docker images
+        run: docker load -i docker-images.tar
+
+      - name: Start Compose stack
+        run: docker compose up -d --wait --wait-timeout 120
+
+      - name: Verify Compose services
+        run: docker compose ps
+
+      - name: Collect Compose logs and clean up
+        if: always()
+        run: |
+          docker compose logs
+          docker compose down -v
+
+  e2e-tests:
+    needs: [build-and-test, compose-start]
+    runs-on: ubuntu-latest
+    env:
+      API_IMAGE: random-generator-api:${{ github.sha }}
+      WEB_IMAGE: random-generator-web:${{ github.sha }}
+      BASE_URL: http://localhost:3000
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Download Docker images
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+
+      - name: Load Docker images
+        run: docker load -i docker-images.tar
+
+      - name: Start Compose stack
+        run: docker compose up -d --wait --wait-timeout 120
+
+      - name: Run end-to-end tests
+        run: npm run test:e2e
+
+      - name: Collect Compose logs and clean up
+        if: always()
+        run: |
+          docker compose logs
+          docker compose down -v
