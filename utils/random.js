@@ -9,6 +9,6 @@ export function generateRandomLetter(){
 
 
 export function generateRandomRockPaperScissors(){
-    const options = ['rock', 'paper', 'scissors'];
+    const options = ['rocks', 'papers', 'scissor'];
     return options[Math.floor(Math.random() * 3)]
 }
