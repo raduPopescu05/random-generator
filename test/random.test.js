@@ -32,7 +32,7 @@ test('random letter is an uppercase letter from A to Z', () => {
         Math.random = () => 0;
         assert.equal(generateRandomLetter(), 'A');
         Math.random = () => 0.999999;
-        assert.equal(generateRandomLetter(), 'T');
+        assert.equal(generateRandomLetter(), 'Z');
     } finally {
         Math.random = originalRandom;
     }
