@@ -10,7 +10,6 @@ on:
 jobs:
   build-code:
     runs-on: ubuntu-latest 
-
     steps: 
       - name: Checkout code
         uses: actions/checkout@v5
@@ -39,8 +38,31 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test  
+        run: npm test
    
+  build-dockerfile-and-push-to-ECR:
+    env:
+      IMAGE_TAG : ${{ github.run_number }}
+    needs: run-tests
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Checkout code
+        uses: actions/checkout@v5
+      
+      - name: Check Dockerfile for backend
+        run: docker build --check . 
+
+      - name: Check Dockerfile for frontend
+        run: docker build --check -f frontend/Dockerfile .
+
+      - name: Build backend Image 
+        run: docker build --tag backend:$IMAGE_TAG --tag backend:latest .
+
+      - name: Build frontend Image 
+        run: docker build --tag frontend:$IMAGE_TAG --tag frontend:latest -f frontend/Dockerfile . 
+
+
+
 
 
 
