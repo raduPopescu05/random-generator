@@ -41,6 +41,7 @@ jobs:
         run: npm test
    
   build-dockerfile-and-push-to-ECR:
+    environment: preprod
     env:
       IMAGE_TAG : ${{ github.run_number }}
     needs: run-tests
@@ -60,6 +61,16 @@ jobs:
 
       - name: Build frontend Image 
         run: docker build --tag frontend:$IMAGE_TAG --tag frontend:latest -f frontend/Dockerfile . 
+
+      - name: Configure AWS Credentials 
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          aws-region: eu-central-1
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      
+      - name: Authenticate with Amazon ECR
+        run: aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 834251003876.dkr.ecr.eu-central-1.amazonaws.com      
 
 
 
