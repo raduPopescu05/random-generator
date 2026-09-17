@@ -5,8 +5,8 @@ This repository contains a Jenkins pipeline in [`Jenkinsfile`](Jenkinsfile). It 
 1. Check out the repository.
 2. Install Node.js dependencies.
 3. Run the Node.js tests.
-4. Validate the backend and frontend Dockerfiles.
-5. Build and tag both Docker images.
+4. Build and validate both Docker images. A successful Docker build validates the corresponding Dockerfile.
+5. Tag both Docker images.
 6. Wait for a manual approval.
 7. Authenticate with Amazon ECR.
 8. Push both images with the Jenkins build number and `latest` tags.
@@ -99,6 +99,7 @@ The named `jenkins_home` volume preserves Jenkins configuration and job data. Pa
    - Pipeline
    - Git
    - GitHub Branch Source
+   - Pipeline: Stage View
 
 The Jenkinsfile uses shell commands for Docker and AWS, so the Docker Pipeline plugin is not required.
 
@@ -110,45 +111,44 @@ The branch is intentionally local until you decide to publish it. From the repos
 git push --set-upstream origin jenkins-migration
 ```
 
-Jenkins must be able to read this remote branch before a Multibranch Pipeline can discover it.
+Jenkins must be able to read this remote branch before the Pipeline job can load the Jenkinsfile.
 
-## Create the Multibranch Pipeline
+## Create the Pipeline job
 
 1. In Jenkins, select **New Item**.
 2. Enter a name such as `random-generator-jenkins`.
-3. Select **Multibranch Pipeline** and choose **OK**.
-4. Under **Branch Sources**, add the GitHub repository.
-5. Configure the repository URL:
+3. Select **Pipeline** and choose **OK**.
+4. Scroll to the **Pipeline** section.
+5. Set **Definition** to **Pipeline script from SCM**.
+6. Set **SCM** to **Git**.
+7. Configure the repository URL:
 
    ```text
    https://github.com/raduPopescu05/random-generator.git
    ```
 
-6. Add GitHub credentials if the repository requires authentication. A GitHub fine-grained token should have repository contents read access.
-7. Under **Build Configuration**, select **by Jenkinsfile**.
-8. Set **Script Path** to:
+8. Add GitHub credentials if the repository requires authentication. A GitHub fine-grained token should have repository contents read access.
+9. Set **Branch Specifier** to:
+
+   ```text
+   */jenkins-migration
+   ```
+
+10. Set **Script Path** to:
 
    ```text
    Jenkinsfile
    ```
 
-9. Add the branch filter trait **Filter by name (with wildcards)**.
-10. Set the include pattern to:
+11. Save the job.
 
-    ```text
-    jenkins-migration
-    ```
-
-11. Leave other branch names excluded.
-12. Save the job and select **Scan Multibranch Pipeline Now**.
-
-Only the `jenkins-migration` branch should be discovered and scheduled.
+The branch specifier ensures that this job checks out only `jenkins-migration`. The Jenkinsfile also contains only the build, approval, and ECR stages; it does not need a Multibranch-only `BRANCH_NAME` variable.
 
 ## Triggering builds
 
 ### Manual scan
 
-For a local Jenkins instance, the simplest option is to select **Scan Multibranch Pipeline Now** after pushing a new commit.
+For a local Jenkins instance, select **Build Now** after pushing a new commit.
 
 ### GitHub webhook
 
@@ -158,13 +158,13 @@ GitHub cannot normally reach `localhost:8080` directly. To use automatic webhook
 https://your-public-jenkins-host/github-webhook/
 ```
 
-Use the **GitHub hook trigger for GITScm polling** option in the Multibranch Pipeline job when available. Do not expose Jenkins without authentication and appropriate network controls.
+Enable **GitHub hook trigger for GITScm polling** in the Pipeline job when available. Do not expose Jenkins without authentication and appropriate network controls.
 
 ## Run and approve the pipeline
 
-1. Open the discovered `jenkins-migration` branch job.
+1. Open the `random-generator-jenkins` job.
 2. Select **Build Now**, or wait for the configured trigger.
-3. Jenkins runs dependency installation, tests, Dockerfile checks, and both Docker builds.
+3. Jenkins runs dependency installation, tests, configuration validation, and both Docker builds.
 4. The pipeline pauses at **Approve ECR push**.
 5. Open the paused build and select **Proceed** to approve the push.
 6. Jenkins then authenticates with ECR and pushes:
@@ -214,11 +214,11 @@ Check the AWS region, registry URI, repository names, and IAM permissions. The r
 
 ### The branch is not discovered
 
-Confirm that `jenkins-migration` was pushed to GitHub, the repository URL is correct, the branch filter includes that exact name, and **Scan Multibranch Pipeline Now** has completed.
+Confirm that `jenkins-migration` was pushed to GitHub, the repository URL is correct, the Branch Specifier is `*/jenkins-migration`, and the job was saved before selecting **Build Now**.
 
 ### The pipeline stops at the branch guard
 
-The Jenkins job is intended only for `jenkins-migration`. Confirm that the Multibranch Pipeline is building the expected branch and that its branch filter does not include another branch.
+The Jenkins job is intended only for `jenkins-migration`. Confirm that the Pipeline job uses the Branch Specifier `*/jenkins-migration`.
 
 ### The approval prompt is not visible
 

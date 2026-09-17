@@ -4,6 +4,7 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         timestamps()
+        disableConcurrentBuilds()
     }
 
     environment {
@@ -30,17 +31,7 @@ pipeline {
             }
         }
 
-        stage('Check Dockerfiles') {
-            steps {
-                sh '''
-                    set -eu
-                    docker build --check -t random-generator-api:check .
-                    docker build --check -t random-generator-web:check -f frontend/Dockerfile .
-                '''
-            }
-        }
-
-        stage('Build Docker images') {
+        stage('Validate Jenkins configuration') {
             steps {
                 script {
                     ['AWS_REGION', 'ECR_REGISTRY', 'BACKEND_IMAGE', 'FRONTEND_IMAGE'].each { variableName ->
@@ -49,6 +40,11 @@ pipeline {
                         }
                     }
                 }
+            }
+        }
+
+        stage('Build and validate Docker images') {
+            steps {
                 sh '''
                     set -eu
                     docker build \
