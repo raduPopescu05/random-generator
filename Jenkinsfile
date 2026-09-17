@@ -11,19 +11,23 @@ pipeline {
     }
 
     stages {
-        stage('Verify branch') {
-            steps {
-                script {
-                    if (env.BRANCH_NAME != 'jenkins-migration') {
-                        error("This pipeline is restricted to the jenkins-migration branch. Current branch: ${env.BRANCH_NAME ?: 'unknown'}")
-                    }
-                }
-            }
-        }
 
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Verify branch') {
+            steps {
+                script {
+                def branchName = env.BRANCH_NAME ?: env.GIT_LOCAL_BRANCH ?: env.GIT_BRANCH
+                branchName = branchName?.replaceFirst(/^origin\//, '')
+                
+                    if (branchName != 'jenkins-migration') {
+                        error("This pipeline is restricted to the jenkins-migration branch. Current branch: ${branchName ?: 'unknown'}")
+                    }
+                }
             }
         }
 
