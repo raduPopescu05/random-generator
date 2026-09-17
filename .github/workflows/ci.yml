@@ -41,7 +41,7 @@ jobs:
         run: npm test
    
   build-dockerfile-and-push-to-ECR:
-    environment: development
+    environment: preprod
     env:
       IMAGE_TAG : ${{ github.run_number }}
     needs: run-tests
