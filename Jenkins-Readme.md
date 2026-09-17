@@ -31,7 +31,7 @@ At minimum, the identity needs permission to obtain an ECR authorization token a
 
 ## Start Jenkins locally with Docker
 
-The example below uses the official Jenkins image, a named volume for persistent Jenkins data, the Docker socket for Docker builds, and a local environment file for AWS/ECR configuration.
+The example below builds the repository's custom Jenkins image, uses a named volume for persistent Jenkins data, mounts the Docker socket for Docker builds, and uses a local environment file for AWS/ECR configuration.
 
 Create a local file named `jenkins.env` in the repository root. Use real values locally and never commit this file:
 
@@ -50,40 +50,34 @@ Create the Jenkins data volume:
 docker volume create jenkins_home
 ```
 
+Build the custom Jenkins image from the repository root:
+
+```powershell
+docker build -t random-generator-jenkins:latest -f jenkins/Dockerfile .
+```
+
+The image is based on `jenkins/jenkins:lts-jdk21` and includes Node.js 22, npm, Docker CLI, AWS CLI, Git, Pipeline, GitHub Branch Source, JUnit, and Pipeline: Stage View plugins.
+
 Start Jenkins from PowerShell:
 
 ```powershell
-docker run -d --name jenkins --restart unless-stopped --user root --env-file .\jenkins.env -p 8080:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock jenkins/jenkins:lts-jdk17
+docker run -d --name jenkins --restart unless-stopped --user root --env-file .\jenkins.env -p 8080:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock random-generator-jenkins:latest
 ```
 
 Open Jenkins at [http://localhost:8080](http://localhost:8080).
 
 The Docker socket gives the Jenkins container control over the Docker daemon on the host. Running the local container as root also simplifies access to that socket. Use this setup only on a trusted development machine; do not expose it as an unprotected production Jenkins instance.
 
-## Install Node.js, Docker CLI, and AWS CLI in Jenkins
-
-The official Jenkins image does not include Node.js, the Docker CLI, or the AWS CLI. The pipeline uses Node.js 22, so install the required tools once inside the running container:
+Verify that the custom image contains the required tools:
 
 ```powershell
-docker exec -u root -it jenkins bash
-apt-get update
-apt-get install -y ca-certificates curl gnupg docker.io awscli
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt-get install -y nodejs
-node --version
-npm --version
-docker --version
-aws --version
-exit
+docker exec jenkins node --version
+docker exec jenkins npm --version
+docker exec jenkins docker --version
+docker exec jenkins aws --version
 ```
 
-Restart Jenkins after installing the tools:
-
-```powershell
-docker restart jenkins
-```
-
-The named `jenkins_home` volume preserves Jenkins configuration and job data. Packages installed inside the container are tied to that container; repeat the installation if you remove and recreate the container. For a long-lived Jenkins installation, build a custom Jenkins image containing these tools instead.
+The named `jenkins_home` volume preserves Jenkins configuration and job data. Rebuild the custom image and recreate the container when changing installed tools or plugins; the named volume preserves the Jenkins data.
 
 ## Complete the Jenkins setup wizard
 
@@ -99,9 +93,10 @@ The named `jenkins_home` volume preserves Jenkins configuration and job data. Pa
    - Pipeline
    - Git
    - GitHub Branch Source
+   - JUnit
    - Pipeline: Stage View
 
-The Jenkinsfile uses shell commands for Docker and AWS, so the Docker Pipeline plugin is not required.
+The custom image installs these plugins during the Docker build. The Jenkinsfile uses shell commands for Docker and AWS, so the Docker Pipeline plugin is not required.
 
 ## Push the branch to GitHub
 
@@ -164,7 +159,7 @@ Enable **GitHub hook trigger for GITScm polling** in the Pipeline job when avail
 
 1. Open the `random-generator-jenkins` job.
 2. Select **Build Now**, or wait for the configured trigger.
-3. Jenkins runs dependency installation, tests, configuration validation, and both Docker builds.
+3. Jenkins runs dependency installation, tests, publishes the JUnit report, validates configuration, and builds both Docker images.
 4. The pipeline pauses at **Approve ECR push**.
 5. Open the paused build and select **Proceed** to approve the push.
 6. Jenkins then authenticates with ECR and pushes:
@@ -178,7 +173,7 @@ The Jenkins build number is used as the immutable build tag for that Jenkins job
 
 ### Jenkins cannot run `docker`
 
-Confirm that Docker CLI is installed inside the Jenkins container:
+Confirm that Docker CLI is installed inside the custom Jenkins container:
 
 ```powershell
 docker exec jenkins docker --version
@@ -198,11 +193,13 @@ If the socket is missing, recreate the container with:
 
 ### Jenkins cannot run `aws`
 
-Install AWS CLI inside the container and verify:
+Verify that AWS CLI is included in the custom image:
 
 ```powershell
 docker exec jenkins aws --version
 ```
+
+If it is missing, rebuild `random-generator-jenkins:latest` from `jenkins/Dockerfile` and recreate the container.
 
 ### AWS credentials are missing
 
@@ -223,3 +220,7 @@ The Jenkins job is intended only for `jenkins-migration`. Confirm that the Pipel
 ### The approval prompt is not visible
 
 Open the running build’s Console Output or Pipeline Steps. The build should be paused at **Approve ECR push**. The ECR login and push stages do not run until **Proceed** is selected.
+
+### Test results are not visible
+
+The pipeline uses Node.js 22's built-in JUnit reporter and writes `test-results/junit.xml`. The JUnit plugin publishes that file after the test stage, including when a test fails. Rebuild the Jenkins image if the JUnit plugin is not installed.

@@ -27,7 +27,18 @@ pipeline {
 
         stage('Run tests') {
             steps {
-                sh 'npm test'
+                sh '''
+                    rm -rf test-results
+                    mkdir -p test-results
+                    npm test -- \
+                        --test-reporter=junit \
+                        --test-reporter-destination=test-results/junit.xml
+                '''
+            }
+            post {
+                always {
+                    junit testResults: 'test-results/junit.xml', allowEmptyResults: false
+                }
             }
         }
 
@@ -68,8 +79,8 @@ pipeline {
 
         stage('Authenticate with ECR') {
             steps {
-                sh '''
-                    set -eu
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
                     test -n "$AWS_ACCESS_KEY_ID"
                     test -n "$AWS_SECRET_ACCESS_KEY"
                     aws ecr get-login-password --region "$AWS_REGION" | \
