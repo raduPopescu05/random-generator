@@ -13,9 +13,15 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
+        stage('Build dockefile for backend') {
             steps {
-                echo 'Deploying....'
+                echo 'checking dockerfile for backend'
+                sh '''
+                docker build --check .
+                docker build --tag backend:latest .
+                docker image ls | grep backend
+                '''
+
             }
         }
     }
