@@ -22,6 +22,7 @@ pipeline {
         stage('Install dependencies') {
             steps {
                 sh 'npm ci'
+                sleep time: 5, unit: 'SECONDS'
             }
         }
 
@@ -34,6 +35,7 @@ pipeline {
                         --test-reporter=junit \
                         --test-reporter-destination=test-results/junit.xml
                 '''
+                sleep time: 5, unit: 'SECONDS'
             }
             post {
                 always {
@@ -50,6 +52,7 @@ pipeline {
                             error("Required Jenkins environment variable is missing: ${variableName}")
                         }
                     }
+                    sleep time: 5, unit: 'SECONDS'
                 }
             }
         }
@@ -68,6 +71,7 @@ pipeline {
                         --tag "$FRONTEND_IMAGE:latest" \
                         .
                 '''
+                sleep time: 5, unit: 'SECONDS'
             }
         }
 
@@ -98,6 +102,7 @@ pipeline {
                     docker push "$FRONTEND_IMAGE:$IMAGE_TAG"
                     docker push "$FRONTEND_IMAGE:latest"
                 '''
+                sleep time: 5, unit: 'SECONDS'
             }
         }
     }

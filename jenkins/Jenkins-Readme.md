@@ -61,7 +61,7 @@ The image is based on `jenkins/jenkins:lts-jdk21` and includes Node.js 22, npm, 
 Start Jenkins from PowerShell:
 
 ```powershell
-docker run -d --name jenkins --restart unless-stopped --user root --env-file .\jenkins.env -p 8080:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock random-generator-jenkins:latest
+docker run -d --name jenkins --restart unless-stopped --user root --env-file .\development.env -p 8080:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock random-generator-jenkins:latest
 ```
 
 Open Jenkins at [http://localhost:8080](http://localhost:8080).
