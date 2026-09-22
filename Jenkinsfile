@@ -2,16 +2,22 @@ pipeline {
     agent any
 
     stages {
-        stage('Build') {
+        stage('Build code') {
             steps {
-                echo 'Building..'
+                sh 'npm ci'
             }
         }
-        stage('Test') {
+        stage('Test code ') {
             steps {
-                echo 'Testing..'
+                sh '''
+                mkdir test-results
+                npm test -- \
+                    --test-reporter=junit \
+                    --test-reporter-destination=test-results/junit.xml
+                '''    
             }
         }
+
         stage('Deploy') {
             steps {
                 echo 'Deploying....'
