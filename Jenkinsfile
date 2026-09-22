@@ -9,12 +9,7 @@ pipeline {
         }
         stage('Test code ') {
             steps {
-                sh '''
-                mkdir test-results
-                npm test -- \
-                    --test-reporter=junit \
-                    --test-reporter-destination=test-results/junit.xml
-                '''    
+                sh 'npm test'    
             }
         }
 
