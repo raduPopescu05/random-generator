@@ -21,7 +21,6 @@ pipeline {
                 docker build --tag backend:latest .
                 docker image ls | grep backend
                 '''
-
             }
         }
     }
