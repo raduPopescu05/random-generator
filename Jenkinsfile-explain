@@ -1,0 +1,337 @@
+pipeline {
+    // Defines a Jenkins Declarative Pipeline.
+
+    agent any
+    // Tells Jenkins that this pipeline can run on any available Jenkins agent/node.
+
+    options {
+        skipDefaultCheckout(true)
+        // By default, Jenkins automatically checks out the source code.
+        // This disables that behavior because checkout is performed manually
+        // in the "Checkout" stage below.
+
+        timestamps()
+        // Adds timestamps to each line in the Jenkins console output.
+
+        disableConcurrentBuilds()
+        // Prevents multiple builds of this pipeline from running at the same time.
+        // If another build is already running, the next one waits.
+    }
+
+    environment {
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        // Creates an environment variable called IMAGE_TAG.
+        // BUILD_NUMBER is a Jenkins built-in variable.
+        // Example:
+        // BUILD_NUMBER=42
+        // IMAGE_TAG=42
+    }
+
+    stages {
+        // Contains all pipeline stages.
+
+        stage('Checkout') {
+            // Stage responsible for retrieving the source code.
+
+            steps {
+                checkout scm
+                // Checks out the source code using the SCM configuration
+                // associated with this Jenkins job.
+                //
+                // For example, if the job is connected to a Git repository,
+                // Jenkins clones/checks out that repository.
+            }
+        }
+
+        stage('Install dependencies') {
+            // Installs the Node.js dependencies required by the project.
+
+            steps {
+                sh 'npm ci'
+                // Executes a shell command on the Jenkins agent.
+                //
+                // "npm ci" installs dependencies exactly according to
+                // package-lock.json.
+                //
+                // It is normally preferred over "npm install" in CI pipelines
+                // because it provides reproducible dependency installation.
+
+                sleep time: 5, unit: 'SECONDS'
+                // Pauses the pipeline for 5 seconds.
+                //
+                // This is usually not necessary unless the delay was added
+                // intentionally for demonstration/debugging purposes.
+            }
+        }
+
+        stage('Run tests') {
+            // Runs the application's automated tests.
+
+            steps {
+                sh '''
+                    rm -rf test-results
+                    // Deletes the old test-results directory if it exists.
+                    // This ensures previous test results cannot interfere
+                    // with the current build.
+
+                    mkdir -p test-results
+                    // Creates the test-results directory.
+                    //
+                    // -p prevents an error if the directory already exists.
+
+                    npm test -- \
+                        --test-reporter=junit \
+                        --test-reporter-destination=test-results/junit.xml
+                    // Runs the npm "test" script.
+                    //
+                    // The "--" tells npm that the remaining arguments should
+                    // be passed to the underlying test command.
+                    //
+                    // --test-reporter=junit
+                    // Requests test results in JUnit XML format.
+                    //
+                    // --test-reporter-destination=...
+                    // Saves those test results into:
+                    //
+                    // test-results/junit.xml
+                '''
+
+                sleep time: 5, unit: 'SECONDS'
+                // Waits 5 seconds after the tests finish.
+            }
+
+            post {
+                // Defines actions that run after this stage finishes.
+
+                always {
+                    // Runs regardless of whether the test stage succeeds
+                    // or fails.
+
+                    junit testResults: 'test-results/junit.xml', allowEmptyResults: false
+                    // Tells Jenkins to read and publish the JUnit test results.
+                    //
+                    // testResults:
+                    // Path to the generated JUnit XML file.
+                    //
+                    // allowEmptyResults: false
+                    // Causes Jenkins to report an error if the JUnit result
+                    // file cannot be found or contains no results.
+                    //
+                    // Published results appear in the Jenkins UI, including
+                    // passed/failed test statistics.
+                }
+            }
+        }
+
+        stage('Validate Jenkins configuration') {
+            // Checks that required environment variables have been configured
+            // before attempting to build/push Docker images.
+
+            steps {
+                script {
+                    // "script" allows normal Groovy code inside a
+                    // Declarative Pipeline.
+
+                    ['AWS_REGION', 'ECR_REGISTRY', 'BACKEND_IMAGE', 'FRONTEND_IMAGE'].each { variableName ->
+                        // Creates a list containing the names of required
+                        // environment variables.
+                        //
+                        // .each iterates over every variable name.
+
+                        if (!env.getProperty(variableName)?.trim()) {
+                            // Reads the Jenkins environment variable dynamically.
+                            //
+                            // Example:
+                            // variableName = "AWS_REGION"
+                            //
+                            // env.getProperty(variableName)
+                            // becomes equivalent to reading env.AWS_REGION.
+                            //
+                            // ?.trim()
+                            // safely removes surrounding whitespace.
+                            //
+                            // The "!" means:
+                            // if the value is missing, null, empty, or only
+                            // whitespace, enter this block.
+
+                            error("Required Jenkins environment variable is missing: ${variableName}")
+                            // Immediately fails the pipeline with a useful
+                            // error message indicating which variable is missing.
+                        }
+                    }
+
+                    sleep time: 5, unit: 'SECONDS'
+                    // Waits 5 seconds after validation completes.
+                }
+            }
+        }
+
+        stage('Build and validate Docker images') {
+            // Builds the backend and frontend Docker images locally
+            // on the Jenkins agent.
+
+            steps {
+                sh '''
+                    set -eu
+                    // Enables stricter shell behavior.
+                    //
+                    // -e:
+                    // Exit immediately if a command fails.
+                    //
+                    // -u:
+                    // Treat usage of an undefined shell variable as an error.
+
+                    docker build \
+                        --tag "$BACKEND_IMAGE:$IMAGE_TAG" \
+                        --tag "$BACKEND_IMAGE:latest" \
+                        .
+                    // Builds the backend Docker image.
+                    //
+                    // Docker uses the Dockerfile in the repository root
+                    // because "." is used as the build context.
+                    //
+                    // Two tags are assigned to the same image:
+                    //
+                    // Example:
+                    // my-backend:42
+                    // my-backend:latest
+                    //
+                    // IMAGE_TAG contains the Jenkins BUILD_NUMBER.
+
+                    docker build \
+                        --file frontend/Dockerfile \
+                        --tag "$FRONTEND_IMAGE:$IMAGE_TAG" \
+                        --tag "$FRONTEND_IMAGE:latest" \
+                        .
+                    // Builds the frontend Docker image.
+                    //
+                    // --file frontend/Dockerfile
+                    // tells Docker to use frontend/Dockerfile instead
+                    // of the root Dockerfile.
+                    //
+                    // Again, two tags are added:
+                    //
+                    // frontend:42
+                    // frontend:latest
+                    //
+                    // "." is still used as the Docker build context.
+                '''
+
+                sleep time: 5, unit: 'SECONDS'
+                // Waits 5 seconds after the Docker builds complete.
+            }
+        }
+
+        stage('Approve ECR push') {
+            // Introduces a manual approval gate before images are uploaded.
+
+            steps {
+                input message: "Approve pushing backend and frontend images for build ${env.BUILD_NUMBER} to ECR?", ok: 'Approve and push'
+                // Pauses the Jenkins pipeline and waits for a user
+                // to approve the deployment.
+                //
+                // The Jenkins UI displays the message:
+                //
+                // "Approve pushing backend and frontend images for build X
+                // to ECR?"
+                //
+                // The approval button is labelled:
+                //
+                // "Approve and push"
+                //
+                // The pipeline does not continue until somebody approves it.
+            }
+        }
+
+        stage('Authenticate with ECR') {
+            // Authenticates Docker with AWS Elastic Container Registry (ECR).
+
+            steps {
+                sh '''#!/usr/bin/env bash
+                    // Uses Bash to execute this shell script.
+
+                    set -euo pipefail
+                    // Enables strict Bash error handling.
+                    //
+                    // -e:
+                    // Stop when a command fails.
+                    //
+                    // -u:
+                    // Fail if an undefined variable is used.
+                    //
+                    // -o pipefail:
+                    // A pipeline fails if any command in the pipeline fails,
+                    // rather than only checking the last command.
+
+                    test -n "$AWS_ACCESS_KEY_ID"
+                    // Verifies that AWS_ACCESS_KEY_ID is not empty.
+                    //
+                    // If it is empty, "test" exits with an error,
+                    // causing this stage to fail.
+
+                    test -n "$AWS_SECRET_ACCESS_KEY"
+                    // Verifies that AWS_SECRET_ACCESS_KEY is not empty.
+
+                    aws ecr get-login-password --region "$AWS_REGION" | \
+                        docker login --username AWS --password-stdin "$ECR_REGISTRY"
+                    // Authenticates Docker with AWS ECR.
+                    //
+                    // aws ecr get-login-password
+                    // asks AWS CLI for a temporary ECR authentication token.
+                    //
+                    // --region "$AWS_REGION"
+                    // specifies the AWS region containing the ECR registry.
+                    //
+                    // The "|" pipes that password directly to:
+                    //
+                    // docker login
+                    //
+                    // --username AWS
+                    // is the required username when authenticating with ECR.
+                    //
+                    // --password-stdin
+                    // reads the password securely from standard input instead
+                    // of placing it directly in the command line.
+                    //
+                    // "$ECR_REGISTRY"
+                    // identifies the registry being logged into.
+                    //
+                    // Example:
+                    // 123456789012.dkr.ecr.eu-central-1.amazonaws.com
+                '''
+            }
+        }
+
+        stage('Push images to ECR') {
+            // Uploads the previously built Docker images to AWS ECR.
+
+            steps {
+                sh '''
+                    set -eu
+                    // Stop on command errors and undefined variables.
+
+                    docker push "$BACKEND_IMAGE:$IMAGE_TAG"
+                    // Pushes the versioned backend image.
+                    //
+                    // Example:
+                    // backend:42
+
+                    docker push "$BACKEND_IMAGE:latest"
+                    // Pushes the backend image using the "latest" tag.
+
+                    docker push "$FRONTEND_IMAGE:$IMAGE_TAG"
+                    // Pushes the versioned frontend image.
+                    //
+                    // Example:
+                    // frontend:42
+
+                    docker push "$FRONTEND_IMAGE:latest"
+                    // Pushes the frontend image using the "latest" tag.
+                '''
+
+                sleep time: 5, unit: 'SECONDS'
+                // Waits 5 seconds after all Docker images have been pushed.
+            }
+        }
+    }
+}

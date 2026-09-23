@@ -45,3 +45,5 @@ RUN jenkins-plugin-cli --plugins \
     github-branch-source \
     junit \
     pipeline-stage-view
+
+USER jenkins
