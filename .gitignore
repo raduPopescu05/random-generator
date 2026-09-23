@@ -1,3 +1,4 @@
 node_modules
 jenkins.env
 *.env
+development.env

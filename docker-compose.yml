@@ -16,8 +16,7 @@ services:
       start_period: 15s
 
   api:
-    build: .
-    image: random-generator-api:latest
+    image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/backend:latest
     expose:
       - "3000"
     environment:
@@ -37,10 +36,7 @@ services:
       start_period: 10s
 
   web:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    image: random-generator-web:latest
+    image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/frontend:latest
     ports:
       - "3000:80"
     depends_on:
