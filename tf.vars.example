@@ -1,0 +1,25 @@
+# Copy to tf.vars and replace placeholders locally. Never commit tf.vars.
+# Load explicitly: terraform plan -var-file="tf.vars"
+REGION = "eu-central-1"
+AMI_ID = "ami-0e516387be1a5f518" # Set after manually preparing the custom AMI.
+
+# Set these locally, or leave null to use AWS CLI profiles/environment variables.
+AWS_ACCESS_KEY_ID     = null
+AWS_SECRET_ACCESS_KEY = null
+
+INSTANCE_TYPE = "t3.small" # Must support x86-64; not t4g/Graviton.
+DISK_SIZE_GB  = 30
+
+VPC_CIDR             = "10.42.0.0/16"
+PUBLIC_SUBNET_CIDRS  = ["10.42.1.0/24", "10.42.2.0/24"]
+PRIVATE_SUBNET_CIDR  = "10.42.10.0/24"
+
+DB_NAME          = "random_generator"
+DB_USER          = "random_app"
+DB_PASSWORD      = "REPLACE-with-a-unique-app-password"
+DB_ROOT_PASSWORD = "REPLACE-with-a-different-root-password"
+
+# These existing repositories must be accessible to the EC2 role in REGION.
+BACKEND_IMAGE  = "834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/backend:latest"
+FRONTEND_IMAGE = "834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/frontend:latest"
+AMI_ID = "ami-0e516387be1a5f518" # Set after manually preparing the custom AMI.

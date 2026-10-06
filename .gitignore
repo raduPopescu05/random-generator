@@ -2,3 +2,12 @@ node_modules
 jenkins.env
 *.env
 development.env
+
+# Local Terraform credentials, state, and plans.
+tf.vars
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log

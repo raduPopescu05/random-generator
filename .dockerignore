@@ -4,3 +4,15 @@ npm-debug.log*
 .gitignore
 Dockerfile
 README.md
+
+# Never send infrastructure credentials or state to Docker builds.
+*.env
+tf.vars
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform
+crash*.log
+main.tf
+tf.vars.example
+.terraform.lock.hcl
