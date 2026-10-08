@@ -11,3 +11,5 @@ tf.vars
 *.tfplan
 crash.log
 crash.*.log
+terraform.tfvars
+.terraform.lock.hcl

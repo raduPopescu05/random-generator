@@ -20,6 +20,6 @@ DB_PASSWORD      = "REPLACE-with-a-unique-app-password"
 DB_ROOT_PASSWORD = "REPLACE-with-a-different-root-password"
 
 # These existing repositories must be accessible to the EC2 role in REGION.
-BACKEND_IMAGE  = "834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/backend:latest"
-FRONTEND_IMAGE = "834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/frontend:latest"
+BACKEND_IMAGE  = "834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/backend:latest"
+FRONTEND_IMAGE = "834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/frontend:latest"
 AMI_ID = "ami-0e516387be1a5f518" # Set after manually preparing the custom AMI.
