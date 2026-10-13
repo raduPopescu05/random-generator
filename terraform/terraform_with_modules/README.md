@@ -1,7 +1,7 @@
 # Modular Terraform example
 
 This is a separate deployment example of the original root configuration.
-It creates a public HTTP ALB and a single private EC2 running Docker Compose
+It creates a public HTTPS ALB with a self-signed development certificate and a single private EC2 running Docker Compose
 from your custom AMI. It has its own local state in this directory.
 Applying it creates a new stack; it does not manage or migrate the original
 folder's resources. Never copy state or saved plans between the two examples.
@@ -12,7 +12,7 @@ folder's resources. Never copy state or saved plans between the two examples.
 | --- | --- | --- | --- |
 | network | VPC, two public subnets, private subnet, internet gateway, NAT/EIP, routes | None | VPC ID and subnet IDs |
 | application | EC2, instance security group/outbound rule, IAM profile and ECR/SSM permissions, runtime cloud-init | VPC ID, private subnet ID | Instance ID and security group ID |
-| load_balancer | ALB, ALB security group/public ingress, HTTP listener, target group | VPC ID, public subnet IDs | URL, target group ARN, security group ID |
+| load_balancer | ALB, ALB security group/public ingress, HTTP redirect, HTTPS listener, self-signed ACM certificate, target group | VPC ID, public subnet IDs | URL, public certificate PEM, target group ARN, security group ID |
 
 Root main.tf connects the modules. It owns the ALB-to-instance security-group
 rules and target attachment so neither application nor load_balancer needs the
@@ -38,7 +38,7 @@ There is no fallback image or software installation.
 From the repository root, in PowerShell:
 
 ```powershell
-Set-Location terraform_with_modules
+Set-Location terraform/terraform_with_modules
 Copy-Item tf.vars.example tf.vars
 ```
 
@@ -69,14 +69,11 @@ terraform fmt -check -recursive
 terraform validate
 ```
 
-Keep .terraform.lock.hcl under version control. The original root lock file was
-absent, so this example's lock file was generated offline from the already
-installed AWS provider 6.67.0. Validation passed using that local package.
-The lock currently contains checksums for Windows amd64 only. Before using
-Linux or CI, obtain the additional official checksums with network access:
+Keep .terraform.lock.hcl under version control for reproducible AWS and TLS
+provider versions. To include checksums for development and CI platforms:
 
 ```powershell
-terraform providers lock -platform=windows_amd64 -platform=linux_amd64
+terraform providers lock -platform=darwin_arm64 -platform=windows_amd64 -platform=linux_amd64
 ```
 
 When you choose to deploy, manually run:
@@ -91,10 +88,10 @@ terraform output -raw session_manager_command
 
 No AWS plan or apply was run as part of creating this example. Always run these
 commands in this directory, not the repository root. Alternatively, use
-terraform -chdir=terraform_with_modules from the repository root.
+terraform -chdir=terraform/terraform_with_modules from the repository root.
 
 The app takes time to pull images and become healthy after EC2 creation. Its
-endpoint is HTTP only. Check startup through Session Manager as described in
+endpoint uses HTTPS with a self-signed certificate. Check startup through Session Manager as described in
 the [original deployment guide](../Terraform-Readme.md#startup-and-access).
 
 Changes to AMI_ID or runtime user data replace EC2 and delete its MySQL data.
@@ -109,3 +106,43 @@ terraform destroy -var-file="tf.vars"
 
 Keep this directory's terraform.tfstate until destruction completes. No moved
 blocks or imports are used because this example starts with independent state.
+
+## Development HTTPS without a domain
+
+Terraform creates the ALB first, generates an RSA-2048 self-signed certificate
+with the ALB's AWS hostname in its DNS subject alternative name, imports it into
+ACM in the configured region, then attaches it to the HTTPS listener. Your AWS
+Terraform identity also needs ACM import, describe, tagging, and delete permissions.
+No domain purchase, DNS validation, or extra input variables are required.
+
+Port 80 redirects to HTTPS on port 443 with HTTP 301, preserving the path and
+query string. TLS terminates at the ALB using a TLS 1.2/1.3 policy; traffic to
+EC2 and the target health check remains HTTP on port 80. The AMI and application
+code need no HTTPS configuration.
+
+Browsers and ordinary HTTP clients do not trust this self-signed certificate by
+default. A warning is expected until you explicitly trust the public certificate.
+For a scoped check with curl, export the public certificate and use --cacert;
+this checks both certificate trust and the ALB hostname without disabling TLS
+verification. From this directory, in Bash/zsh after applying:
+
+```bash
+terraform output -raw certificate_pem > /tmp/random-generator-alb.pem
+app_url="$(terraform output -raw application_url)"
+curl --cacert /tmp/random-generator-alb.pem "$app_url/health/ready"
+curl -I "${app_url/https:/http:}/history?limit=10"
+```
+
+The health endpoint should return HTTP 200; the HTTP request should return 301
+with an HTTPS Location preserving /history?limit=10. In a browser, after explicitly
+trusting the certificate, check the frontend, generation buttons, and history.
+Only the public certificate is exported; never share the private key or state.
+If you import the certificate into a local trust store, remove the trust entry
+when the development stack is destroyed or the certificate is replaced.
+
+The private key is stored in Terraform state. Keep state and saved plans private.
+The certificate lasts 365 days; Terraform renews it on an apply during its final
+30 days (or after expiration). ACM does not automatically renew imported
+certificates. Reapply before expiration and export/trust the replacement public
+certificate. Recreating the ALB changes its hostname and generates a matching
+certificate. This configuration is intended for development.

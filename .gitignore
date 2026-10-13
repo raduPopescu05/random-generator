@@ -13,3 +13,6 @@ crash.log
 crash.*.log
 terraform.tfvars
 .terraform.lock.hcl
+
+# Track reproducible provider selections for the modular deployment.
+!terraform/terraform_with_modules/.terraform.lock.hcl
