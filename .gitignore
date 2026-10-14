@@ -18,3 +18,5 @@ terraform.tfvars
 !eks_with_terraform/.terraform.lock.hcl
 eks_with_terraform/platform/controller-values.yaml
 eks_with_terraform/.local/
+terraform.tfvars.json
+eks_with_terraform/**/__pycache__/

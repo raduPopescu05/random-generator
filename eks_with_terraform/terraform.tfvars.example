@@ -1,7 +1,0 @@
-region = "eu-central-1"
-cluster_name = "random-generator-eks"
-kubernetes_version = "1.35"
-# Replace with the IAM role or user used by your AWS CLI for kubectl authentication.
-admin_principal_arn = "arn:aws:iam::123456789012:role/REPLACE_WITH_OPERATOR_ROLE"
-# Replace this documentation address with your public egress IP (or VPN CIDR).
-public_access_cidrs = ["203.0.113.10/32"]

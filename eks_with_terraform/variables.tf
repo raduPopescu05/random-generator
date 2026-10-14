@@ -42,3 +42,27 @@ variable "private_subnet_cidrs" {
   type    = list(string)
   default = ["10.43.10.0/24", "10.43.11.0/24"]
 }
+
+variable "aws_profile" {
+  description = "Optional local AWS profile used by Terraform and the deployment script. Null uses the normal environment credential chain."
+  type        = string
+  default     = null
+}
+
+variable "backend_image" {
+  description = "Existing linux/amd64 backend image URI, with a tag or digest."
+  type        = string
+  validation {
+    condition     = can(regex("^[^\\s@]+(:[^\\s/:@]+|@sha256:[a-f0-9]{64})$", var.backend_image))
+    error_message = "Supply a complete image URI with a tag or digest and no whitespace."
+  }
+}
+
+variable "frontend_image" {
+  description = "Existing linux/amd64 frontend image URI, with a tag or digest."
+  type        = string
+  validation {
+    condition     = can(regex("^[^\\s@]+(:[^\\s/:@]+|@sha256:[a-f0-9]{64})$", var.frontend_image))
+    error_message = "Supply a complete image URI with a tag or digest and no whitespace."
+  }
+}

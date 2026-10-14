@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/frontend:latest
+          image: "__FRONTEND_IMAGE__"
           imagePullPolicy: Always
           ports:
             - containerPort: 80

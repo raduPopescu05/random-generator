@@ -1,7 +1,7 @@
-# Chart 1.14.1 / controller v2.14.1. Replace using terraform output values.
-clusterName: random-generator-eks
-region: eu-central-1
-vpcId: REPLACE_WITH_VPC_ID
+# Chart 1.14.1 / controller v2.14.1. deploy.py substitutes applied Terraform outputs.
+clusterName: "__CLUSTER_NAME__"
+region: "__REGION__"
+vpcId: "__VPC_ID__"
 replicaCount: 1
 image:
   tag: v2.14.1
@@ -9,7 +9,7 @@ serviceAccount:
   create: true
   name: aws-load-balancer-controller
   annotations:
-    eks.amazonaws.com/role-arn: REPLACE_WITH_CONTROLLER_ROLE_ARN
+    eks.amazonaws.com/role-arn: "__CONTROLLER_ROLE_ARN__"
 resources:
   requests:
     cpu: 100m
