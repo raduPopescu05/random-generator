@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: random-generator
+data:
+  DB_HOST: db
+  DB_PORT: '3306'
+  DB_NAME: random_generator
+  DB_USER: random_app

@@ -13,3 +13,8 @@ crash.log
 crash.*.log
 terraform.tfvars
 .terraform.lock.hcl
+
+# EKS development deployment: track provider selections, ignore local inputs.
+!eks_with_terraform/.terraform.lock.hcl
+eks_with_terraform/platform/controller-values.yaml
+eks_with_terraform/.local/

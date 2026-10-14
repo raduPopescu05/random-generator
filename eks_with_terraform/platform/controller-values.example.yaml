@@ -1,0 +1,23 @@
+# Chart 1.14.1 / controller v2.14.1. Replace using terraform output values.
+clusterName: random-generator-eks
+region: eu-central-1
+vpcId: REPLACE_WITH_VPC_ID
+replicaCount: 1
+image:
+  tag: v2.14.1
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+  annotations:
+    eks.amazonaws.com/role-arn: REPLACE_WITH_CONTROLLER_ROLE_ARN
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 250m
+    memory: 512Mi
+# The chart generates webhook certificates; no cert-manager deployment needed.
+enableCertManager: false
+# This deployment exposes apps through Ingress, not LoadBalancer Services.
+enableServiceMutatorWebhook: false
