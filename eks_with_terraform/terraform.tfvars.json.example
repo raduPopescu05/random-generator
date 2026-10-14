@@ -1,0 +1,12 @@
+{
+  "aws_profile": null,
+  "region": "eu-central-1",
+  "cluster_name": "random-generator-eks",
+  "kubernetes_version": "1.35",
+  "admin_principal_arn": "arn:aws:iam::123456789012:role/REPLACE_WITH_OPERATOR_ROLE",
+  "public_access_cidrs": [
+    "203.0.113.10/32"
+  ],
+  "backend_image": "834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/backend:latest",
+  "frontend_image": "834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/frontend:latest"
+}

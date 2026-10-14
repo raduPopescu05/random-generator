@@ -16,3 +16,6 @@ crash*.log
 main.tf
 tf.vars.example
 .terraform.lock.hcl
+
+# EKS infrastructure and locally generated deployment files.
+eks_with_terraform/

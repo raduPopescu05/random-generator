@@ -1,0 +1,7 @@
+# Strategic merge patch, not a standalone Kubernetes resource.
+spec:
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        eks.amazonaws.com/compute-type: fargate
