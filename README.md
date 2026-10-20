@@ -8,7 +8,7 @@ A simple Node.js and Express application that exposes API endpoints for generati
 - Returns responses in JSON format
 
 ## Requirements
-- Node.js
+- Node.js 22 or 24 (or version 26+), when running outside Docker
 - npm
 
 ## Installation
@@ -50,21 +50,34 @@ To stop the container, press `Ctrl+C`.
 
 ### Docker Compose
 
-Start the service with:
+First copy `.env.example` to `.env` and set a unique `GRAFANA_ADMIN_PASSWORD`
+(do not overwrite an existing `.env`). Then start the stack:
 ````
-docker compose up --build
+docker compose up -d --build
 ````
 
-This starts three services: a MySQL database, an API container, and an Nginx web container. MySQL is available to the other Compose services as `db:3306`; the named `mysql-data` volume preserves its data. Open `http://localhost:3000` for the UI.
+This builds the API and Nginx frontend locally and starts five services: MySQL,
+the API, the frontend, Prometheus, and Grafana. No ECR login is needed.
+MySQL is available internally as `db:3306`; `mysql-data` preserves its data.
+Open `http://localhost:3000` for the app, `http://localhost:9090` for Prometheus,
+and `http://localhost:3001` for Grafana. Sign in to Grafana as `admin` using the
+password from `.env`. Three dashboards are provisioned in the **Random Generator**
+folder: API Overview, Node.js Runtime, and Generation & Database Activity.
 
-The API waits for the MySQL health check before starting, and the web service waits for the API health check. Stop the stack with `Ctrl+C`, or run `docker compose down` in another terminal.
+See [the monitoring README](monitoring/README.md) for sample traffic, dashboard
+usage, configuration, troubleshooting, and monitoring-only reset instructions.
+
+The API waits for the MySQL health check before starting, and the web service waits
+for the API health check. Prometheus scrapes the internal API metrics endpoint every
+15 seconds. Monitoring interfaces are bound to the local machine.
 
 Stop the stack with:
 ````
 docker compose down
 ````
 
-To remove the database volume and start with an empty history, run:
+The following removes **all** stack volumes, including generation history,
+Prometheus history, and Grafana settings:
 
 ````powershell
 docker compose down -v

@@ -1,0 +1,11 @@
+apiVersion: 1
+providers:
+  - name: random-generator
+    folder: Random Generator
+    folderUid: random-generator
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 15
+    options:
+      path: /var/lib/grafana/dashboards
