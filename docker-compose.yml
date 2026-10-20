@@ -16,7 +16,7 @@ services:
       start_period: 15s
 
   api:
-    image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/backend:latest
+    build: .
     expose:
       - "3000"
     environment:
@@ -36,13 +36,45 @@ services:
       start_period: 10s
 
   web:
-    image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/frontend:latest
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
-      - "3000:80"
+      - "${APP_PORT:-3000}:80"
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    restart: unless-stopped
+
 volumes:
   mysql-data:
+  prometheus-data:
+  grafana-data:
