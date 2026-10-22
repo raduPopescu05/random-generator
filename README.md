@@ -132,13 +132,13 @@ The tests use Node's built-in test runner and cover the random generators, date 
 ## Continuous integration
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` runs on pushes to `main`
-and `app-fix-v1`, and on pull requests targeting `main`. It installs the locked
+and on pull requests targeting `main`. It installs the locked
 Node.js dependencies, runs tests, validates Compose, checks both Dockerfiles,
 and builds the backend and frontend images.
 
 Push and pull-request runs validate and build without AWS authentication or
 image publication. ECR publishing is manual: open **Actions → CI → Run workflow**,
-select the branch and the required `architecture` choice (`x64` by default), then
+select `main` and the required `architecture` choice (`x64` by default), then
 start the run. The dependency-installation and test jobs must succeed before the
 publishing job starts.
 
@@ -148,29 +148,30 @@ publishing job starts.
 | `arm` | `linux/arm64` | `/arm/backend`, `/arm/frontend` |
 
 The publishing job uses Buildx and QEMU on the Ubuntu runner to build the selected
-platform and load both images locally. It then uses the `preprod` environment's
+platform and load both images locally. It then uses the `dev` environment's
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets to authenticate to ECR in
 `eu-central-1`. Both images are published with the workflow run number and
 `latest` tags under this prefix:
 
 ```text
-834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository
 ```
 
 For example, selecting `arm` publishes to this prefix plus `/arm/backend` and
 `/arm/frontend`. These repositories must already exist, and the credentials must
 allow ECR login and image pushes. The workflow does not create repositories.
-`latest` is separate for each architecture but shared across publishing branches;
+`latest` is separate for each architecture but updated by subsequent manual runs on `main`;
 use the run-number tag to select a specific build.
 
 The workflow with `workflow_dispatch` must be present on the default branch
 (`main`) for the manual Run workflow trigger to be available. After that, select
-`app-fix-v1` or another intended branch containing this workflow. The `preprod`
-environment must allow the selected branch, and any required reviewer approvals
-still apply. Pushing this branch alone runs checks; it does not publish images.
+`main`; manual runs targeting other branches skip all jobs. The `dev` environment
+must allow `main`, and any required reviewer approvals still apply. Pushes to
+other branches do not trigger CI; pull requests targeting `main` run checks only.
 
-The commented ECR examples in Compose point to older `dev` repositories. Replace
-them with the matching `preprod` architecture URLs above to run pipeline images.
+The commented ECR examples in Compose point to `dev` repositories without an
+architecture suffix. Replace them with the matching architecture URLs above to
+run pipeline images.
 
 ### Dockerfile and Compose checks
 

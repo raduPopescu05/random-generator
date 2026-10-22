@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, app-fix-v1 ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -19,6 +19,7 @@ on:
 
 jobs:
   build-code:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -62,8 +63,8 @@ jobs:
           docker build -t frontend:ci -f frontend/Dockerfile .
 
   build-dockerfile-and-push-to-ECR:
-    if: github.event_name == 'workflow_dispatch'
-    environment: preprod
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    environment: dev
     env:
       IMAGE_TAG: ${{ github.run_number }}
     needs: run-tests
@@ -91,7 +92,7 @@ jobs:
             *) echo "Unsupported architecture: $ARCHITECTURE" >&2; exit 1 ;;
           esac
           echo "IMAGE_PLATFORM=$platform" >> "$GITHUB_ENV"
-          echo "ECR_IMAGE_PREFIX=834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/$ARCHITECTURE" >> "$GITHUB_ENV"
+          echo "ECR_IMAGE_PREFIX=834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/$ARCHITECTURE" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
