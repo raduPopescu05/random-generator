@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: [ main ]
 
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: Image architecture to publish to ECR
+        required: true
+        default: x64
+        type: choice
+        options:
+          - x64
+          - arm
 
 jobs:
   build-code:
@@ -43,8 +53,8 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose --env-file /dev/null config --quiet
 
-      - name: Check and build images for pull requests
-        if: github.event_name == 'pull_request'
+      - name: Check and build images for automatic runs
+        if: github.event_name != 'workflow_dispatch'
         run: |
           docker build --check .
           docker build --check -f frontend/Dockerfile .
@@ -52,10 +62,10 @@ jobs:
           docker build -t frontend:ci -f frontend/Dockerfile .
 
   build-dockerfile-and-push-to-ECR:
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
     environment: preprod
     env:
-      IMAGE_TAG : ${{ github.run_number }}
+      IMAGE_TAG: ${{ github.run_number }}
     needs: run-tests
     runs-on: ubuntu-latest
     steps:
@@ -71,11 +81,31 @@ jobs:
       - name: Check Dockerfile for frontend
         run: docker build --check -f frontend/Dockerfile .
 
+      - name: Select image architecture
+        env:
+          ARCHITECTURE: ${{ inputs.architecture }}
+        run: |
+          case "$ARCHITECTURE" in
+            x64) platform=linux/amd64 ;;
+            arm) platform=linux/arm64 ;;
+            *) echo "Unsupported architecture: $ARCHITECTURE" >&2; exit 1 ;;
+          esac
+          echo "IMAGE_PLATFORM=$platform" >> "$GITHUB_ENV"
+          echo "ECR_IMAGE_PREFIX=834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/$ARCHITECTURE" >> "$GITHUB_ENV"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build backend Image
-        run: docker build --tag "backend:$IMAGE_TAG" --tag backend:latest .
+        run: docker buildx build --platform "$IMAGE_PLATFORM" --load --tag "backend:$IMAGE_TAG" --tag backend:latest .
 
       - name: Build frontend Image
-        run: docker build --tag "frontend:$IMAGE_TAG" --tag frontend:latest -f frontend/Dockerfile .
+        run: docker buildx build --platform "$IMAGE_PLATFORM" --load --tag "frontend:$IMAGE_TAG" --tag frontend:latest -f frontend/Dockerfile .
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -89,14 +119,14 @@ jobs:
 
       - name: Push backend image
         run: |
-          docker tag "backend:$IMAGE_TAG" "834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/backend:$IMAGE_TAG"
-          docker push "834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/backend:$IMAGE_TAG"
-          docker tag backend:latest 834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/backend:latest
-          docker push 834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/backend:latest
+          docker tag "backend:$IMAGE_TAG" "$ECR_IMAGE_PREFIX/backend:$IMAGE_TAG"
+          docker push "$ECR_IMAGE_PREFIX/backend:$IMAGE_TAG"
+          docker tag backend:latest "$ECR_IMAGE_PREFIX/backend:latest"
+          docker push "$ECR_IMAGE_PREFIX/backend:latest"
 
       - name: Push frontend image
         run: |
-          docker tag "frontend:$IMAGE_TAG" "834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/frontend:$IMAGE_TAG"
-          docker push "834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/frontend:$IMAGE_TAG"
-          docker tag frontend:latest 834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/frontend:latest
-          docker push 834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/frontend:latest
+          docker tag "frontend:$IMAGE_TAG" "$ECR_IMAGE_PREFIX/frontend:$IMAGE_TAG"
+          docker push "$ECR_IMAGE_PREFIX/frontend:$IMAGE_TAG"
+          docker tag frontend:latest "$ECR_IMAGE_PREFIX/frontend:latest"
+          docker push "$ECR_IMAGE_PREFIX/frontend:latest"
