@@ -158,8 +158,8 @@ platform and load both images locally. It then uses the selected GitHub Environm
 834251003876.dkr.ecr.eu-central-1.amazonaws.com/<environment>/random-generator-repository
 ```
 
-Both environments use AWS account `834251003876` in `eu-central-1`. Create the
-following ECR repositories before publishing to the corresponding combination:
+Both environments use AWS account `834251003876` in `eu-central-1`. The modular Terraform ECR module can create the following repositories before
+publishing to the corresponding combination:
 
 ```text
 dev/random-generator-repository/x64/backend
@@ -171,6 +171,9 @@ preprod/random-generator-repository/x64/frontend
 preprod/random-generator-repository/arm/backend
 preprod/random-generator-repository/arm/frontend
 ```
+
+Configure the eight individual repository variables in the modular root’s ignored
+`tf.vars`, using `ecr.tfvars.example`. See the [ECR setup and import instructions](terraform/terraform_with_modules/README.md#ecr-repositories).
 
 Create GitHub Environments named `dev` and `preprod`, each with
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets granting ECR login and

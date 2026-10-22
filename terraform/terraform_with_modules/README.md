@@ -10,6 +10,7 @@ folder's resources. Never copy state or saved plans between the two examples.
 
 | Module | Owns | Inputs from other modules | Outputs |
 | --- | --- | --- | --- |
+| ecr | Eight private repositories for dev/preprod, x64/arm, backend/frontend | Individual repository-name variables | Individual repository URLs and ARNs |
 | network | VPC, two public subnets, private subnet, internet gateway, NAT/EIP, routes | None | VPC ID and subnet IDs |
 | application | EC2, instance security group/outbound rule, IAM profile and ECR/SSM permissions, runtime cloud-init | VPC ID, private subnet ID | Instance ID and security group ID |
 | load_balancer | ALB, ALB security group/public ingress, HTTP listener, target group | VPC ID, public subnet IDs | URL, target group ARN, security group ID |
@@ -45,8 +46,8 @@ Copy-Item tf.vars.example tf.vars
 Edit tf.vars locally. Set your AMI ID, passwords, image URIs, and instance size.
 The example uses the x64 ECR repositories discussed for this application; replace
 them if your existing linux/amd64 images use different repositories. Both images
-must be in REGION and accessible to the instance role. These repositories are
-not created by Terraform.
+must be in REGION and accessible to the instance role. The ECR module creates the repositories named by the eight ECR variables.
+Images must be published separately before the application can pull them.
 
 Leave AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY null to use your normal AWS
 profile/environment, or set matching IAM user credentials locally. Temporary
@@ -99,7 +100,7 @@ the [original deployment guide](../Terraform-Readme.md#startup-and-access).
 
 Changes to AMI_ID or runtime user data replace EC2 and delete its MySQL data.
 There is one server, one NAT gateway, no backups, and ongoing AWS charges while
-the resources exist. ECR repositories and the AMI are existing external inputs.
+the resources exist. The AMI remains an external input. ECR repositories are managed by this stack.
 
 To remove only this example's stack, run from this directory:
 
@@ -107,5 +108,60 @@ To remove only this example's stack, run from this directory:
 terraform destroy -var-file="tf.vars"
 ```
 
-Keep this directory's terraform.tfstate until destruction completes. No moved
-blocks or imports are used because this example starts with independent state.
+Keep this directory's terraform.tfstate until destruction completes. Import any existing ECR repositories before applying, as described below.
+
+## ECR repositories
+
+The root passes eight separate string variables to `modules/ecr`, one for each
+combination of dev/preprod, x64/arm, and backend/frontend. Copy the assignments
+from `ecr.tfvars.example` into your existing ignored `tf.vars`, preserving its
+other settings. There are no repository-name defaults in `variables.tf`.
+Names match the GitHub Actions publishing paths; if you customize them, update
+the workflow destinations accordingly.
+
+From the repository root:
+
+```sh
+terraform -chdir=terraform/terraform_with_modules init
+terraform -chdir=terraform/terraform_with_modules plan -var-file="tf.vars" -out="deployment.tfplan"
+```
+
+The plan includes the entire modular stack, not just ECR. Repositories inherit
+the provider region and account; use account `834251003876` and `eu-central-1` to
+match CI. This root should be the single owner of these eight shared repository
+names; do not create the same repositories from separate environment states.
+
+Tags are mutable so CI can update `latest`. Default ECR encryption is used and
+no expiration policy is added. `force_delete = false` prevents Terraform from
+deleting repositories that still contain images.
+
+Each repository has individual root URL and ARN outputs, for example:
+
+```sh
+terraform -chdir=terraform/terraform_with_modules output -raw ecr_dev_arm_backend_url
+terraform -chdir=terraform/terraform_with_modules output -raw ecr_dev_arm_backend_arn
+```
+
+Output names follow `ecr_<environment>_<architecture>_<service>_url` and `_arn`.
+The ECR module does not change application image inputs or publish images.
+Creating an empty repository does not make the application image available.
+
+If a repository already exists, import it into this state before applying:
+
+```sh
+terraform -chdir=terraform/terraform_with_modules import -var-file="tf.vars" module.ecr.aws_ecr_repository.dev_arm_backend dev/random-generator-repository/arm/backend
+```
+
+Repeat for each existing repository, using its matching explicit resource name
+(e.g. `preprod_x64_frontend`) and configured repository name. Then review a plan;
+do not delete existing repositories to resolve creation conflicts.
+
+Mocked module tests require no AWS credentials or resources:
+
+```sh
+terraform -chdir=terraform/terraform_with_modules/modules/ecr init -backend=false
+terraform -chdir=terraform/terraform_with_modules/modules/ecr test
+```
+
+The tests check each repository's settings, an individual name override, and all
+URL/ARN outputs. Their mock-provider apply does not call AWS.
