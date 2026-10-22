@@ -61,6 +61,18 @@ MySQL is available internally as `db:3306`; `mysql-data` preserves its data.
 Open `http://localhost:3000` for the app. Set `APP_PORT` to use a different host port
 (for example, `APP_PORT=8080 docker compose up -d --build`).
 
+`APP_PORT` is an optional Compose variable supplied by your shell or a `.env` file
+in the repository root (for example, `APP_PORT=8080`). It is not defined in app
+code. The `${APP_PORT:-3000}` expression in Compose defaults to `3000` when the
+variable is unset or empty. This lets you avoid a host-port conflict without
+editing Compose; the frontend still listens on port 80 and the API on port 3000
+inside their containers. With the example above, open `http://localhost:8080`.
+
+The original ECR image URLs are kept as comments beside each local build setting.
+To use those prebuilt images, uncomment the `image` lines and remove or comment
+out each service's complete `build` setting, then authenticate to ECR and pull
+the images before starting Compose.
+
 The API waits for the MySQL health check before starting, and the web service waits
 for the API health check.
 
@@ -85,6 +97,26 @@ their configuration files. Configure Prometheus on the same Compose network to
 scrape `api:3000` at `/metrics`, then configure Grafana to use Prometheus as its
 data source. No app-code changes are required. Metric names and labels remain
 compatible with the dashboards on the `monitoring` branch.
+
+### Metrics dependencies
+
+`@prometheus-io/client` is a direct app dependency used by `utils/metrics.js` to
+create counters, duration histograms, default Node.js/process metrics, and the
+registry served at `/metrics`. Keeping it lets Prometheus collect metrics later
+without changing app code. It does not start a Prometheus or Grafana server.
+
+The client brings these indirect dependencies into `package-lock.json`:
+
+| Package | Why it is installed |
+| --- | --- |
+| `@opentelemetry/api` | The client's CPU metrics module imports it to attach trace/span identifiers to metric samples when exemplars are enabled. This app does not enable exemplars or configure a tracing exporter. |
+| `tdigest` | Provides percentile estimation for the client's Summary metrics. Our app uses counters and histograms, but this remains a declared dependency of the client. |
+| `bintrees` | Required by `tdigest` to keep its data points grouped and ordered in a balanced tree for percentile calculations. |
+
+Only the client is added directly to `package.json`. The lockfile records its
+exact version and the resolved indirect dependencies so `npm ci` can reproduce
+the installation. These entries should remain even when their optional features
+are unused; they belong to the client's dependency tree.
 
 ### Running tests
 
