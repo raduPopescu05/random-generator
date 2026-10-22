@@ -131,9 +131,35 @@ The tests use Node's built-in test runner and cover the random generators, date 
 
 ## Continuous integration
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` runs for pull requests and pushes to `main`. It checks out the source, installs dependencies, runs the unit tests, lints both Dockerfiles, validates the Compose configuration, checks the Dockerfiles, and builds the API and frontend images tagged with the commit SHA.
+The GitHub Actions workflow in `.github/workflows/ci.yml` runs on pushes to `main`
+and `app-fix-v1`, and on pull requests targeting `main`. It installs the locked
+Node.js dependencies, runs tests, validates Compose, checks both Dockerfiles,
+and builds the backend and frontend images.
 
-The workflow does not publish images or deploy anything. Image publishing to Amazon ECR will be added separately.
+On push runs only, it uses the `preprod` environment's `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` secrets to authenticate to ECR in `eu-central-1` and push
+both images with the workflow run number and `latest` tags. Pull requests build
+and validate without AWS authentication or image publication.
+
+To run the pipeline for this branch, push its commits:
+
+```sh
+git push -u origin app-fix-v1
+```
+
+Follow the run in the repository's Actions tab. The `preprod` environment must
+allow deployments from `app-fix-v1` (and may require reviewer approval). Its AWS
+credentials must permit ECR login and image pushes to these existing repositories:
+
+```text
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/backend
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/preprod/random-generator-repository/x64/frontend
+```
+
+These are Linux x64 images built on the GitHub Ubuntu runner. The commented ECR
+examples in Compose point to older `dev` repositories; replace them with the
+`preprod` URLs above to run these pipeline images. Prefer the run-number tag to
+select a specific build; `latest` is shared by publishing runs from both branches.
 
 ### Dockerfile and Compose checks
 
