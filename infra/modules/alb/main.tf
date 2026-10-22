@@ -39,6 +39,10 @@ resource "aws_lb_target_group" "app" {
   protocol    = "HTTP"
   vpc_id      = var.VPC_ID
 
+  health_check {
+    path    = "/"
+    matcher = "200"
+  }
 }
 
 

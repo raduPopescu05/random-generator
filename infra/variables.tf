@@ -29,3 +29,23 @@ variable "PRIVATE_SUBNET_CIDR" {
   default = "10.42.10.0/24"
 }
 
+
+variable "INSTANCE_TYPE" {
+  type    = string
+  default = "t3.small"
+}
+
+variable "IMAGE_TAG" {
+  type    = string
+  default = "latest"
+}
+
+variable "DB_PASSWORD" {
+  type      = string
+  sensitive = true
+}
+
+variable "DB_ROOT_PASSWORD" {
+  type      = string
+  sensitive = true
+}
