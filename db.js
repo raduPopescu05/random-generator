@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { metrics } from './utils/metrics.js';
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST ?? '127.0.0.1',
@@ -39,23 +40,24 @@ export async function initializeDatabase({ retries = 30, delayMs = 2000 } = {}) 
 }
 
 export async function checkDatabase() {
-    await pool.query('SELECT 1');
+    await metrics.measureDatabase('readiness', () => pool.query('SELECT 1'));
 }
 
 export async function saveGeneration(type, value) {
-    await pool.execute(
+    await metrics.measureDatabase('insert_generation', () => pool.execute(
         'INSERT INTO generations (type, value) VALUES (?, ?)',
         [type, String(value)]
-    );
+    ));
+    metrics.recordGeneration(type);
 }
 
 export async function listGenerations(limit = 20) {
     const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 100);
-    const [rows] = await pool.query(
+    const [rows] = await metrics.measureDatabase('list_generations', () => pool.query(
         `SELECT id, type, value, created_at
          FROM generations
          ORDER BY id DESC
          LIMIT ${safeLimit}`
-    );
+    ));
     return rows;
 }

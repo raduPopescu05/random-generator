@@ -8,7 +8,7 @@ A simple Node.js and Express application that exposes API endpoints for generati
 - Returns responses in JSON format
 
 ## Requirements
-- Node.js
+- Node.js 22 or 24 (or version 26+), when running outside Docker
 - npm
 
 ## Installation
@@ -50,25 +50,41 @@ To stop the container, press `Ctrl+C`.
 
 ### Docker Compose
 
-Start the service with:
+Start the app with:
 ````
-docker compose up --build
+docker compose up -d --build
 ````
 
-This starts three services: a MySQL database, an API container, and an Nginx web container. MySQL is available to the other Compose services as `db:3306`; the named `mysql-data` volume preserves its data. Open `http://localhost:3000` for the UI.
+This builds the API and Nginx frontend locally and starts three services: MySQL,
+the API, and the frontend. No ECR login or monitoring credentials are needed.
+MySQL is available internally as `db:3306`; `mysql-data` preserves its data.
+Open `http://localhost:3000` for the app. Set `APP_PORT` to use a different host port
+(for example, `APP_PORT=8080 docker compose up -d --build`).
 
-The API waits for the MySQL health check before starting, and the web service waits for the API health check. Stop the stack with `Ctrl+C`, or run `docker compose down` in another terminal.
+The API waits for the MySQL health check before starting, and the web service waits
+for the API health check.
 
-Stop the stack with:
+Stop the app with:
 ````
 docker compose down
 ````
 
-To remove the database volume and start with an empty history, run:
-
-````powershell
+To also remove the database volume and its generation history:
+````
 docker compose down -v
 ````
+
+### Adding monitoring later
+
+The API already collects HTTP, generation, database, and Node.js runtime metrics.
+It exposes them at `http://api:3000/metrics` inside the Compose network, and runs
+normally without a metrics collector. Nginx does not proxy this endpoint publicly.
+
+To add monitoring later, add Prometheus and Grafana services to Compose and supply
+their configuration files. Configure Prometheus on the same Compose network to
+scrape `api:3000` at `/metrics`, then configure Grafana to use Prometheus as its
+data source. No app-code changes are required. Metric names and labels remain
+compatible with the dashboards on the `monitoring` branch.
 
 ### Running tests
 
@@ -79,7 +95,7 @@ npm ci
 npm test
 ````
 
-The tests use Node's built-in test runner and cover the random generators and date formatting. They do not require MySQL.
+The tests use Node's built-in test runner and cover the random generators, date formatting, and metrics instrumentation. They do not require MySQL.
 
 ## Continuous integration
 

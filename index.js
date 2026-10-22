@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { formatDateYmdHis } from './utils/date.js';
 import { generateRandomLetter, generateRandomNumber, generateRandomRockPaperScissors } from './utils/random.js';
 import { checkDatabase, initializeDatabase, listGenerations, saveGeneration } from './db.js';
+import { metrics } from './utils/metrics.js';
 
 const app = express();
 const _PORT = 3000;
@@ -12,6 +13,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 console.log('Starting random generator...');
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(metrics.middleware);
+app.get('/metrics', metrics.endpoint);
 
 app.get('/api', (req, res) => {
     res.json({
