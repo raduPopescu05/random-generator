@@ -8,7 +8,7 @@ A simple Node.js and Express application that exposes API endpoints for generati
 - Returns responses in JSON format
 
 ## Requirements
-- Node.js
+- Node.js 22 or 24 (or version 26+), when running outside Docker
 - npm
 
 ## Installation
@@ -50,25 +50,73 @@ To stop the container, press `Ctrl+C`.
 
 ### Docker Compose
 
-Start the service with:
+Start the app with:
 ````
-docker compose up --build
+docker compose up -d --build
 ````
 
-This starts three services: a MySQL database, an API container, and an Nginx web container. MySQL is available to the other Compose services as `db:3306`; the named `mysql-data` volume preserves its data. Open `http://localhost:3000` for the UI.
+This builds the API and Nginx frontend locally and starts three services: MySQL,
+the API, and the frontend. No ECR login or monitoring credentials are needed.
+MySQL is available internally as `db:3306`; `mysql-data` preserves its data.
+Open `http://localhost:3000` for the app. Set `APP_PORT` to use a different host port
+(for example, `APP_PORT=8080 docker compose up -d --build`).
 
-The API waits for the MySQL health check before starting, and the web service waits for the API health check. Stop the stack with `Ctrl+C`, or run `docker compose down` in another terminal.
+`APP_PORT` is an optional Compose variable supplied by your shell or a `.env` file
+in the repository root (for example, `APP_PORT=8080`). It is not defined in app
+code. The `${APP_PORT:-3000}` expression in Compose defaults to `3000` when the
+variable is unset or empty. This lets you avoid a host-port conflict without
+editing Compose; the frontend still listens on port 80 and the API on port 3000
+inside their containers. With the example above, open `http://localhost:8080`.
 
-Stop the stack with:
+The original ECR image URLs are kept as comments beside each local build setting.
+To use those prebuilt images, uncomment the `image` lines and remove or comment
+out each service's complete `build` setting, then authenticate to ECR and pull
+the images before starting Compose.
+
+The API waits for the MySQL health check before starting, and the web service waits
+for the API health check.
+
+Stop the app with:
 ````
 docker compose down
 ````
 
-To remove the database volume and start with an empty history, run:
-
-````powershell
+To also remove the database volume and its generation history:
+````
 docker compose down -v
 ````
+
+### Adding monitoring later
+
+The API already collects HTTP, generation, database, and Node.js runtime metrics.
+It exposes them at `http://api:3000/metrics` inside the Compose network, and runs
+normally without a metrics collector. Nginx does not proxy this endpoint publicly.
+
+To add monitoring later, add Prometheus and Grafana services to Compose and supply
+their configuration files. Configure Prometheus on the same Compose network to
+scrape `api:3000` at `/metrics`, then configure Grafana to use Prometheus as its
+data source. No app-code changes are required. Metric names and labels remain
+compatible with the dashboards on the `monitoring` branch.
+
+### Metrics dependencies
+
+`@prometheus-io/client` is a direct app dependency used by `utils/metrics.js` to
+create counters, duration histograms, default Node.js/process metrics, and the
+registry served at `/metrics`. Keeping it lets Prometheus collect metrics later
+without changing app code. It does not start a Prometheus or Grafana server.
+
+The client brings these indirect dependencies into `package-lock.json`:
+
+| Package | Why it is installed |
+| --- | --- |
+| `@opentelemetry/api` | The client's CPU metrics module imports it to attach trace/span identifiers to metric samples when exemplars are enabled. This app does not enable exemplars or configure a tracing exporter. |
+| `tdigest` | Provides percentile estimation for the client's Summary metrics. Our app uses counters and histograms, but this remains a declared dependency of the client. |
+| `bintrees` | Required by `tdigest` to keep its data points grouped and ordered in a balanced tree for percentile calculations. |
+
+Only the client is added directly to `package.json`. The lockfile records its
+exact version and the resolved indirect dependencies so `npm ci` can reproduce
+the installation. These entries should remain even when their optional features
+are unused; they belong to the client's dependency tree.
 
 ### Running tests
 
@@ -79,13 +127,72 @@ npm ci
 npm test
 ````
 
-The tests use Node's built-in test runner and cover the random generators and date formatting. They do not require MySQL.
+The tests use Node's built-in test runner and cover the random generators, date formatting, and metrics instrumentation. They do not require MySQL.
 
 ## Continuous integration
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` runs for pull requests and pushes to `main`. It checks out the source, installs dependencies, runs the unit tests, lints both Dockerfiles, validates the Compose configuration, checks the Dockerfiles, and builds the API and frontend images tagged with the commit SHA.
+The GitHub Actions workflow in `.github/workflows/ci.yml` runs on pushes to `main`
+and on pull requests targeting `main`. It installs the locked
+Node.js dependencies, runs tests, validates Compose, checks both Dockerfiles,
+and builds the backend and frontend images.
 
-The workflow does not publish images or deploy anything. Image publishing to Amazon ECR will be added separately.
+Push and pull-request runs validate and build without AWS authentication or
+image publication. ECR publishing is manual: open **Actions → CI → Run workflow**,
+select `main`, `target_environment` (`dev` by default), and `architecture`
+(`arm` by default), then start the run. You can start a new run whenever needed
+without pushing a commit. The dependency-installation and test jobs must succeed before the
+publishing job starts.
+
+| Architecture choice | Docker platform | ECR repository suffixes |
+| --- | --- | --- |
+| `x64` | `linux/amd64` | `/x64/backend`, `/x64/frontend` |
+| `arm` | `linux/arm64` | `/arm/backend`, `/arm/frontend` |
+
+The publishing job uses Buildx and QEMU on the Ubuntu runner to build the selected
+platform and load both images locally. It then uses the selected GitHub Environment's
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets to authenticate to ECR in
+`eu-central-1`. Both images are published with the workflow run number and
+`latest` tags under this prefix:
+
+```text
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/<environment>/random-generator-repository
+```
+
+Both environments use AWS account `834251003876` in `eu-central-1`. The modular Terraform ECR module can create the following repositories before
+publishing to the corresponding combination:
+
+```text
+dev/random-generator-repository/x64/backend
+dev/random-generator-repository/x64/frontend
+dev/random-generator-repository/arm/backend
+dev/random-generator-repository/arm/frontend
+preprod/random-generator-repository/x64/backend
+preprod/random-generator-repository/x64/frontend
+preprod/random-generator-repository/arm/backend
+preprod/random-generator-repository/arm/frontend
+```
+
+Configure the eight individual repository variables in the modular root’s ignored
+`tf.vars`, using `ecr.tfvars.example`. See the [ECR setup and import instructions](terraform/terraform_with_modules/README.md#ecr-repositories).
+
+Create GitHub Environments named `dev` and `preprod`, each with
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets granting ECR login and
+push access to its repositories. Both architectures are available in either
+environment: `arm` means Linux ARM64 for local ARM development or compatible AWS
+instances; `x64` means Linux x86-64. The workflow does not create repositories,
+deploy containers, or promote existing images: each manual run builds fresh images.
+`latest` is separate for each environment and architecture, and updated by subsequent manual runs on `main`;
+use the run-number tag to select a specific build.
+
+The workflow with `workflow_dispatch` must be present on the default branch
+(`main`) for the manual Run workflow trigger to be available. After that, select
+`main`; manual runs targeting other branches skip all jobs. Both GitHub Environments
+must allow `main`, and any required reviewer approvals still apply. Pushes to
+other branches do not trigger CI; pull requests targeting `main` run checks only.
+
+The commented ECR examples in Compose point to `dev` repositories without an
+architecture suffix. Replace them with the matching architecture URLs above to
+run pipeline images.
 
 ### Dockerfile and Compose checks
 
