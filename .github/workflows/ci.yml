@@ -8,10 +8,18 @@ on:
 
   workflow_dispatch:
     inputs:
+      target_environment:
+        description: Environment to publish images to
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - preprod
       architecture:
         description: Image architecture to publish to ECR
         required: true
-        default: x64
+        default: arm
         type: choice
         options:
           - x64
@@ -64,7 +72,7 @@ jobs:
 
   build-dockerfile-and-push-to-ECR:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    environment: dev
+    environment: ${{ inputs.target_environment }}
     env:
       IMAGE_TAG: ${{ github.run_number }}
     needs: run-tests
@@ -82,17 +90,22 @@ jobs:
       - name: Check Dockerfile for frontend
         run: docker build --check -f frontend/Dockerfile .
 
-      - name: Select image architecture
+      - name: Select image environment and architecture
         env:
+          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
           ARCHITECTURE: ${{ inputs.architecture }}
         run: |
+          case "$TARGET_ENVIRONMENT" in
+            dev|preprod) ;;
+            *) echo "Unsupported environment: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
+          esac
           case "$ARCHITECTURE" in
             x64) platform=linux/amd64 ;;
             arm) platform=linux/arm64 ;;
             *) echo "Unsupported architecture: $ARCHITECTURE" >&2; exit 1 ;;
           esac
           echo "IMAGE_PLATFORM=$platform" >> "$GITHUB_ENV"
-          echo "ECR_IMAGE_PREFIX=834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/$ARCHITECTURE" >> "$GITHUB_ENV"
+          echo "ECR_IMAGE_PREFIX=834251003876.dkr.ecr.eu-central-1.amazonaws.com/$TARGET_ENVIRONMENT/random-generator-repository/$ARCHITECTURE" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

@@ -138,8 +138,9 @@ and builds the backend and frontend images.
 
 Push and pull-request runs validate and build without AWS authentication or
 image publication. ECR publishing is manual: open **Actions → CI → Run workflow**,
-select `main` and the required `architecture` choice (`x64` by default), then
-start the run. The dependency-installation and test jobs must succeed before the
+select `main`, `target_environment` (`dev` by default), and `architecture`
+(`arm` by default), then start the run. You can start a new run whenever needed
+without pushing a commit. The dependency-installation and test jobs must succeed before the
 publishing job starts.
 
 | Architecture choice | Docker platform | ECR repository suffixes |
@@ -148,24 +149,41 @@ publishing job starts.
 | `arm` | `linux/arm64` | `/arm/backend`, `/arm/frontend` |
 
 The publishing job uses Buildx and QEMU on the Ubuntu runner to build the selected
-platform and load both images locally. It then uses the `dev` environment's
+platform and load both images locally. It then uses the selected GitHub Environment's
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets to authenticate to ECR in
 `eu-central-1`. Both images are published with the workflow run number and
 `latest` tags under this prefix:
 
 ```text
-834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/<environment>/random-generator-repository
 ```
 
-For example, selecting `arm` publishes to this prefix plus `/arm/backend` and
-`/arm/frontend`. These repositories must already exist, and the credentials must
-allow ECR login and image pushes. The workflow does not create repositories.
-`latest` is separate for each architecture but updated by subsequent manual runs on `main`;
+Both environments use AWS account `834251003876` in `eu-central-1`. Create the
+following ECR repositories before publishing to the corresponding combination:
+
+```text
+dev/random-generator-repository/x64/backend
+dev/random-generator-repository/x64/frontend
+dev/random-generator-repository/arm/backend
+dev/random-generator-repository/arm/frontend
+preprod/random-generator-repository/x64/backend
+preprod/random-generator-repository/x64/frontend
+preprod/random-generator-repository/arm/backend
+preprod/random-generator-repository/arm/frontend
+```
+
+Create GitHub Environments named `dev` and `preprod`, each with
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets granting ECR login and
+push access to its repositories. Both architectures are available in either
+environment: `arm` means Linux ARM64 for local ARM development or compatible AWS
+instances; `x64` means Linux x86-64. The workflow does not create repositories,
+deploy containers, or promote existing images: each manual run builds fresh images.
+`latest` is separate for each environment and architecture, and updated by subsequent manual runs on `main`;
 use the run-number tag to select a specific build.
 
 The workflow with `workflow_dispatch` must be present on the default branch
 (`main`) for the manual Run workflow trigger to be available. After that, select
-`main`; manual runs targeting other branches skip all jobs. The `dev` environment
+`main`; manual runs targeting other branches skip all jobs. Both GitHub Environments
 must allow `main`, and any required reviewer approvals still apply. Pushes to
 other branches do not trigger CI; pull requests targeting `main` run checks only.
 
