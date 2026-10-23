@@ -6,6 +6,8 @@ module "network" {
   PRIVATE_SUBNET_CIDR = var.PRIVATE_SUBNET_CIDR
 }
 
+
+
 module "application" {
   source            = "./modules/application"
   VPC_ID            = module.network.vpc_id
@@ -51,16 +53,4 @@ resource "aws_lb_target_group_attachment" "app" {
   target_group_arn = module.load_balancer.target_group_arn
   target_id        = module.application.instance_id
   port             = 80
-}
-
-module "ecr" {
-  source                   = "./modules/ecr"
-  ECR_DEV_X64_BACKEND      = var.ECR_DEV_X64_BACKEND
-  ECR_DEV_X64_FRONTEND     = var.ECR_DEV_X64_FRONTEND
-  ECR_DEV_ARM_BACKEND      = var.ECR_DEV_ARM_BACKEND
-  ECR_DEV_ARM_FRONTEND     = var.ECR_DEV_ARM_FRONTEND
-  ECR_PREPROD_X64_BACKEND  = var.ECR_PREPROD_X64_BACKEND
-  ECR_PREPROD_X64_FRONTEND = var.ECR_PREPROD_X64_FRONTEND
-  ECR_PREPROD_ARM_BACKEND  = var.ECR_PREPROD_ARM_BACKEND
-  ECR_PREPROD_ARM_FRONTEND = var.ECR_PREPROD_ARM_FRONTEND
 }

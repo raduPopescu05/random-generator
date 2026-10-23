@@ -29,6 +29,7 @@ console also supports Session Manager.
 Use the ignored `tf.vars` file created locally. In a fresh clone:
 
 ```powershell
+Set-Location infrastructure/bad_examples/standalone
 Copy-Item tf.vars.example tf.vars
 ```
 
@@ -64,7 +65,7 @@ start sessions. No AWS resources are created by `init` or `validate`.
 
 ## Validate, plan, and deploy
 
-Run from the repository root:
+Run from `infrastructure/bad_examples/standalone`:
 
 ```powershell
 terraform init
@@ -78,7 +79,7 @@ terraform output -raw instance_id
 ```
 
 `terraform.tfstate` stays locally. Preserve it to manage and destroy this
-deployment. Keep `.terraform.lock.hcl` in Git for reproducible provider selection.
+deployment. The current repository rules ignore `.terraform.lock.hcl`; preserve your local lockfile.
 `tf.vars`, state, backup state, saved plans, and `.terraform/` are ignored by Git
 and excluded from Docker build contexts.
 

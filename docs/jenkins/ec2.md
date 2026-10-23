@@ -2,7 +2,7 @@
 
 This guide explains how to operate the Jenkins pipeline for this repository in a production AWS environment using Amazon EC2.
 
-It is a theory and architecture guide. It does not replace the local Jenkins setup instructions in [`Jenkins-Readme.md`](Jenkins-Readme.md), and it does not require changes to the current [`Jenkinsfile`](Jenkinsfile).
+It is a theory and architecture guide. It does not replace the local Jenkins setup instructions in [Jenkins setup](setup.md), and it does not require changes to the current [`Jenkinsfile`](../../Jenkinsfile).
 
 ## Recommended production architecture
 
@@ -170,7 +170,7 @@ This project publishes two images:
 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/frontend
 ```
 
-The backend is built from the root `Dockerfile`. The frontend is built from `frontend/Dockerfile` using the repository root as the build context.
+The backend is built from the `docker/backend/Dockerfile`. The frontend is built from `docker/frontend/Dockerfile` using the repository root as the build context.
 
 ### Recommended tags
 

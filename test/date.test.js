@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatDateYmdHis } from '../utils/date.js';
+import { formatDateYmdHis } from '../src/utils/date.js';
 
 test('formats a date as YYYY-MM-DD HH:mm:ss', () => {
     const date = new Date(2026, 8, 14, 5, 6, 7);

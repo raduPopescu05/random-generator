@@ -56,11 +56,6 @@ pipeline {
                 // It is normally preferred over "npm install" in CI pipelines
                 // because it provides reproducible dependency installation.
 
-                sleep time: 5, unit: 'SECONDS'
-                // Pauses the pipeline for 5 seconds.
-                //
-                // This is usually not necessary unless the delay was added
-                // intentionally for demonstration/debugging purposes.
             }
         }
 
@@ -96,8 +91,6 @@ pipeline {
                     // test-results/junit.xml
                 '''
 
-                sleep time: 5, unit: 'SECONDS'
-                // Waits 5 seconds after the tests finish.
             }
 
             post {
@@ -160,8 +153,6 @@ pipeline {
                         }
                     }
 
-                    sleep time: 5, unit: 'SECONDS'
-                    // Waits 5 seconds after validation completes.
                 }
             }
         }
@@ -182,12 +173,13 @@ pipeline {
                     // Treat usage of an undefined shell variable as an error.
 
                     docker build \
+                        --file docker/backend/Dockerfile \
                         --tag "$BACKEND_IMAGE:$IMAGE_TAG" \
                         --tag "$BACKEND_IMAGE:latest" \
                         .
                     // Builds the backend Docker image.
                     //
-                    // Docker uses the Dockerfile in the repository root
+                    // Docker uses the Dockerfile at docker/backend/Dockerfile
                     // because "." is used as the build context.
                     //
                     // Two tags are assigned to the same image:
@@ -199,15 +191,15 @@ pipeline {
                     // IMAGE_TAG contains the Jenkins BUILD_NUMBER.
 
                     docker build \
-                        --file frontend/Dockerfile \
+                        --file docker/frontend/Dockerfile \
                         --tag "$FRONTEND_IMAGE:$IMAGE_TAG" \
                         --tag "$FRONTEND_IMAGE:latest" \
                         .
                     // Builds the frontend Docker image.
                     //
-                    // --file frontend/Dockerfile
-                    // tells Docker to use frontend/Dockerfile instead
-                    // of the root Dockerfile.
+                    // --file docker/frontend/Dockerfile
+                    // tells Docker to use docker/frontend/Dockerfile instead
+                    // of the backend Dockerfile.
                     //
                     // Again, two tags are added:
                     //
@@ -217,8 +209,6 @@ pipeline {
                     // "." is still used as the Docker build context.
                 '''
 
-                sleep time: 5, unit: 'SECONDS'
-                // Waits 5 seconds after the Docker builds complete.
             }
         }
 
@@ -329,8 +319,6 @@ pipeline {
                     // Pushes the frontend image using the "latest" tag.
                 '''
 
-                sleep time: 5, unit: 'SECONDS'
-                // Waits 5 seconds after all Docker images have been pushed.
             }
         }
     }

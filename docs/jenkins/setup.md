@@ -1,6 +1,6 @@
 # Jenkins pipeline for the `jenkins-migration` branch
 
-This repository contains a Jenkins pipeline in [`Jenkinsfile`](Jenkinsfile). It mirrors the CI/CD flow used by the GitHub Actions workflow:
+This repository contains a Jenkins pipeline in [`Jenkinsfile`](../../Jenkinsfile). It mirrors the CI/CD flow used by the GitHub Actions workflow:
 
 1. Check out the repository.
 2. Install Node.js dependencies.
@@ -53,7 +53,7 @@ docker volume create jenkins_home
 Build the custom Jenkins image from the repository root:
 
 ```powershell
-docker build -t random-generator-jenkins:latest -f jenkins/Dockerfile .
+docker build -t random-generator-jenkins:latest -f docker/jenkins/Dockerfile .
 ```
 
 The image is based on `jenkins/jenkins:lts-jdk21` and includes Node.js 22, npm, Docker CLI, AWS CLI, Git, Pipeline, GitHub Branch Source, JUnit, and Pipeline: Stage View plugins.
@@ -199,7 +199,7 @@ Verify that AWS CLI is included in the custom image:
 docker exec jenkins aws --version
 ```
 
-If it is missing, rebuild `random-generator-jenkins:latest` from `jenkins/Dockerfile` and recreate the container.
+If it is missing, rebuild `random-generator-jenkins:latest` from `docker/jenkins/Dockerfile` and recreate the container.
 
 ### AWS credentials are missing
 

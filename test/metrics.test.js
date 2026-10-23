@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { once } from 'node:events';
-import { createMetrics } from '../utils/metrics.js';
+import { createMetrics } from '../src/utils/metrics.js';
 
 test('HTTP metrics record normalized routes, errors and exclude operational/static traffic', async () => {
     const metrics = createMetrics({ defaults: false });

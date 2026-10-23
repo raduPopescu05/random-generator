@@ -1,299 +1,191 @@
-# RANDOM GENERATOR 
-A simple Node.js and Express application that exposes API endpoints for generating random numbers and letters.
+# Random Generator
 
-## Features
-- Returns basic application information
-- Generates a random number between 0 and 99
-- Generates a random uppercase letter from A to Z
-- Returns responses in JSON format
+A Node.js and Express app with a browser UI for generating numbers from 0–99,
+uppercase letters, and rock-paper-scissors choices. Each result is stored in
+MySQL and displayed in recent history. The backend also exposes health checks
+and Prometheus-compatible HTTP, database, generation, and Node.js metrics.
 
-## Requirements
-- Node.js 22 or 24 (or version 26+), when running outside Docker
-- npm
+## Quick start with Docker Compose
 
-## Installation
-Clone the repository: 
-````
-git clone git@github.com:Adrian-Moldovan/nodejs-random-generator.git
-cd <repository-folder>
-````
+Install Docker with Compose, then clone the repository:
 
-Install the dependencies:
-````
-npm install
-````
-
-## Running the Application
-Start the server with: 
-````
-npm start
-````
-
-When starting Node directly, MySQL must already be running and the `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` environment variables must point to it. For the complete local setup, use Docker Compose below.
-
-The API will run at:
-````
-http://localhost:3000
-````
-
-## Running with Docker
-
-Build the image and start the container:
-````
-docker build -t random-generator .
-docker run --rm -p 3000:3000 random-generator
-````
-
-Open `http://localhost:3000` for the UI. The API endpoints remain available at `/number`, `/letter`, and `/rock-paper-scissors`.
-
-To stop the container, press `Ctrl+C`.
-
-### Docker Compose
-
-Start the app with:
-````
+```sh
+git clone https://github.com/raduPopescu05/random-generator.git
+cd random-generator
 docker compose up -d --build
-````
+```
 
-This builds the API and Nginx frontend locally and starts three services: MySQL,
-the API, and the frontend. No ECR login or monitoring credentials are needed.
-MySQL is available internally as `db:3306`; `mysql-data` preserves its data.
-Open `http://localhost:3000` for the app. Set `APP_PORT` to use a different host port
-(for example, `APP_PORT=8080 docker compose up -d --build`).
+Open [localhost:3000](http://localhost:3000). Compose builds the backend and Nginx
+frontend and starts MySQL 8.4. The API waits for MySQL readiness; Nginx waits for
+the API. Local builds require no AWS credentials.
 
-`APP_PORT` is an optional Compose variable supplied by your shell or a `.env` file
-in the repository root (for example, `APP_PORT=8080`). It is not defined in app
-code. The `${APP_PORT:-3000}` expression in Compose defaults to `3000` when the
-variable is unset or empty. This lets you avoid a host-port conflict without
-editing Compose; the frontend still listens on port 80 and the API on port 3000
-inside their containers. With the example above, open `http://localhost:8080`.
+Only Nginx is published to the host. It listens on container port 80, the API on
+internal port 3000, and MySQL on internal port 3306. To change the host port:
 
-The original ECR image URLs are kept as comments beside each local build setting.
-To use those prebuilt images, uncomment the `image` lines and remove or comment
-out each service's complete `build` setting, then authenticate to ECR and pull
-the images before starting Compose.
+```sh
+APP_PORT=8080 docker compose up -d --build
+```
 
-The API waits for the MySQL health check before starting, and the web service waits
-for the API health check.
+`APP_PORT` can also be set in a root-level `.env` file. It controls the Compose
+host mapping, not the Node.js listening port.
 
-Stop the app with:
-````
+```sh
 docker compose down
-````
+```
 
-To also remove the database volume and its generation history:
-````
+The `mysql-data` volume preserves history. To also delete that data:
+
+```sh
 docker compose down -v
-````
+```
 
-### Adding monitoring later
+## Run directly with Node.js
 
-The API already collects HTTP, generation, database, and Node.js runtime metrics.
-It exposes them at `http://api:3000/metrics` inside the Compose network, and runs
-normally without a metrics collector. Nginx does not proxy this endpoint publicly.
+The project uses Node.js 22 in its Dockerfile and CI. Install Node.js 22 and npm,
+and provide a running MySQL server with the database and application user
+already created. The application creates its `generations` table on startup.
 
-To add monitoring later, add Prometheus and Grafana services to Compose and supply
-their configuration files. Configure Prometheus on the same Compose network to
-scrape `api:3000` at `/metrics`, then configure Grafana to use Prometheus as its
-data source. No app-code changes are required. Metric names and labels remain
-compatible with the dashboards on the `monitoring` branch.
+```sh
+npm ci
+DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=random_generator DB_USER=random_app DB_PASSWORD=your-password npm start
+```
 
-### Metrics dependencies
+These are POSIX shell examples. Set equivalent environment variables when using
+PowerShell. The entry point is `src/index.js`; the UI and API are served directly
+at [localhost:3000](http://localhost:3000). Startup waits for schema initialization.
 
-`@prometheus-io/client` is a direct app dependency used by `utils/metrics.js` to
-create counters, duration histograms, default Node.js/process metrics, and the
-registry served at `/metrics`. Keeping it lets Prometheus collect metrics later
-without changing app code. It does not start a Prometheus or Grafana server.
-
-The client brings these indirect dependencies into `package-lock.json`:
-
-| Package | Why it is installed |
+| Variable | Direct Node.js default |
 | --- | --- |
-| `@opentelemetry/api` | The client's CPU metrics module imports it to attach trace/span identifiers to metric samples when exemplars are enabled. This app does not enable exemplars or configure a tracing exporter. |
-| `tdigest` | Provides percentile estimation for the client's Summary metrics. Our app uses counters and histograms, but this remains a declared dependency of the client. |
-| `bintrees` | Required by `tdigest` to keep its data points grouped and ordered in a balanced tree for percentile calculations. |
+| `DB_HOST` | `127.0.0.1` |
+| `DB_PORT` | `3306` |
+| `DB_NAME` | `random_generator` |
+| `DB_USER` | `random_app` |
+| `DB_PASSWORD` | `random_password` |
 
-Only the client is added directly to `package.json`. The lockfile records its
-exact version and the resolved indirect dependencies so `npm ci` can reproduce
-the installation. These entries should remain even when their optional features
-are unused; they belong to the client's dependency tree.
+Compose supplies its own matching database settings to MySQL and the API.
+The Node.js app reads process environment variables; it does not load `.env`
+files automatically. Compose does not publish its MySQL port for host access.
 
-### Running tests
+## Endpoints
 
-Install the locked dependencies and run the unit tests with:
+| Method and path | Behavior |
+| --- | --- |
+| `GET /` | Browser UI |
+| `GET /api` | Application information and available generator/history endpoints |
+| `GET /number` | Generate and persist an integer from 0–99 |
+| `GET /letter` | Generate and persist an uppercase A–Z letter |
+| `GET /rock-paper-scissors` | Generate and persist `rock`, `paper`, or `scissors` |
+| `GET /history?limit=10` | Recent records, newest first; default limit 20, bounded to 1–100 |
+| `GET /health/live` | Backend liveness |
+| `GET /health/ready` | Database readiness; HTTP 503 when unavailable |
+| `GET /metrics` | Prometheus-compatible metrics |
 
-````powershell
+Generator responses contain `description`, `value`, and `timestamp`. Generation
+and history requests return HTTP 503 if persistence is unavailable.
+
+The current Nginx configuration proxies `/api`, the three generator routes, and
+`/history`. Health and metrics endpoints are available directly on the backend;
+they are not proxied by Nginx. Inside Compose, metrics are at `http://api:3000/metrics`.
+Prometheus and Grafana are not included in the Compose stack. Metrics are collected
+by `@prometheus-io/client` in `src/utils/metrics.js`.
+
+## Tests and build checks
+
+From the repository root:
+
+```sh
 npm ci
 npm test
-````
-
-The tests use Node's built-in test runner and cover the random generators, date formatting, and metrics instrumentation. They do not require MySQL.
-
-## Continuous integration
-
-The GitHub Actions workflow in `.github/workflows/ci.yml` runs on pushes to `main`
-and on pull requests targeting `main`. It installs the locked
-Node.js dependencies, runs tests, validates Compose, checks both Dockerfiles,
-and builds the backend and frontend images.
-
-Push and pull-request runs validate and build without AWS authentication or
-image publication. ECR publishing is manual: open **Actions → CI → Run workflow**,
-select `main`, `target_environment` (`dev` by default), and `architecture`
-(`arm` by default), then start the run. You can start a new run whenever needed
-without pushing a commit. The dependency-installation and test jobs must succeed before the
-publishing job starts.
-
-| Architecture choice | Docker platform | ECR repository suffixes |
-| --- | --- | --- |
-| `x64` | `linux/amd64` | `/x64/backend`, `/x64/frontend` |
-| `arm` | `linux/arm64` | `/arm/backend`, `/arm/frontend` |
-
-The publishing job uses Buildx and QEMU on the Ubuntu runner to build the selected
-platform and load both images locally. It then uses the selected GitHub Environment's
-`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets to authenticate to ECR in
-`eu-central-1`. Both images are published with the workflow run number and
-`latest` tags under this prefix:
-
-```text
-834251003876.dkr.ecr.eu-central-1.amazonaws.com/<environment>/random-generator-repository
+docker compose --env-file /dev/null config --quiet
+docker build --check -f docker/backend/Dockerfile .
+docker build --check -f docker/frontend/Dockerfile .
+docker build -t random-generator-api:check -f docker/backend/Dockerfile .
+docker build -t random-generator-web:check -f docker/frontend/Dockerfile .
 ```
 
-Both environments use AWS account `834251003876` in `eu-central-1`. The modular Terraform ECR module can create the following repositories before
-publishing to the corresponding combination:
+Tests cover generators, date formatting, and metrics using Node's built-in test
+runner; they do not require MySQL. Image builds require a running Docker daemon.
+Both Dockerfiles use the repository root as their build context.
+
+## CI and image publishing
+
+[GitHub Actions](.github/workflows/ci.yml) runs checks on pushes to `main` and pull
+requests targeting `main`. Automatic runs install dependencies, run tests,
+validate Compose, and check/build both application images without publishing.
+
+Pushes to `main` automatically install dependencies, run tests, and validate
+Compose. After successful checks, the `build-and-publish` job waits for approval
+independently for `dev` and `preprod`. Approve either or both environments in the
+workflow run. Each approved job builds the backend and frontend x64 images
+(`linux/amd64`) and pushes them to ECR on the same runner.
+
+No release image is built before approval. Approving both environments runs one
+build-and-publish job for each environment. Pull requests still build validation
+images automatically and cannot publish. All steps are in `ci.yml`; no image
+archives or artifact transfers are needed.
+
+### Configure publication approvals
+
+In **Settings → Environments**, configure `dev` and `preprod` with required
+reviewers, a deployment branch rule allowing only `main`, and environment secrets
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Allow self-review if you need to
+approve your own runs. Disable administrator bypass if approvals must always be
+enforced. A short check before AWS authentication blocks publishing if required
+reviewers are missing or the public environment metadata cannot be read.
+
+Images are published under:
 
 ```text
-dev/random-generator-repository/x64/backend
-dev/random-generator-repository/x64/frontend
-dev/random-generator-repository/arm/backend
-dev/random-generator-repository/arm/frontend
-preprod/random-generator-repository/x64/backend
-preprod/random-generator-repository/x64/frontend
-preprod/random-generator-repository/arm/backend
-preprod/random-generator-repository/arm/frontend
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/<environment>/random-generator-repository/x64/<backend-or-frontend>:<run-number>
 ```
 
-Configure the eight individual repository variables in the modular root’s ignored
-`tf.vars`, using `ecr.tfvars.example`. See the [ECR setup and import instructions](terraform/terraform_with_modules/README.md#ecr-repositories).
+Each image also receives `latest`. Publishing is serialized per environment;
+an older approved run can move `latest` backward. Use run-number tags for
+deployment. The summary reports the commit, environment, build number and image
+URIs. CI does not create infrastructure or deploy the application.
 
-Create GitHub Environments named `dev` and `preprod`, each with
-`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets granting ECR login and
-push access to its repositories. Both architectures are available in either
-environment: `arm` means Linux ARM64 for local ARM development or compatible AWS
-instances; `x64` means Linux x86-64. The workflow does not create repositories,
-deploy containers, or promote existing images: each manual run builds fresh images.
-`latest` is separate for each environment and architecture, and updated by subsequent manual runs on `main`;
-use the run-number tag to select a specific build.
+Build images for your local machine using `docker compose up -d --build`.
+Local builds are separate from the x64-only ECR publishing pipeline.
 
-The workflow with `workflow_dispatch` must be present on the default branch
-(`main`) for the manual Run workflow trigger to be available. After that, select
-`main`; manual runs targeting other branches skip all jobs. Both GitHub Environments
-must allow `main`, and any required reviewer approvals still apply. Pushes to
-other branches do not trigger CI; pull requests targeting `main` run checks only.
+## AWS deployment order
 
-The commented ECR examples in Compose point to `dev` repositories without an
-architecture suffix. Replace them with the matching architecture URLs above to
-run pipeline images.
+Follow the [Terraform deployment guide](infrastructure/terraform_wth_modules/README.md):
 
-### Dockerfile and Compose checks
+1. Create repositories locally using the [ECR root](infrastructure/terraform_wth_modules/ecr/README.md).
+2. Let CI run checks, then approve building and publishing to the desired environment.
+   Use the published `x64` image URIs for the current application AMI.
+3. Apply the [application root](infrastructure/terraform_wth_modules/app/README.md) locally with the published image URIs.
 
-The same checks can be run locally when the Docker daemon is available:
+The two Terraform roots use separate local state. Application teardown leaves
+ECR repositories and images intact. Keep region, account, image architecture,
+and the prepared AMI consistent across the stages.
 
-````powershell
-hadolint Dockerfile
-hadolint frontend\Dockerfile
-docker compose config
-docker build --check -t random-generator-api:check .
-docker build --check -t random-generator-web:check -f frontend\Dockerfile .
-````
-
-## API Endpoints
-
-### GET /
-Returns information about the application and the available endpoints.
-
-Example response:
-````
-{ 
-    "appName": "Random generator", 
-    "status": "Up and running!", 
-    "availableEndpoints": [ 
-        { 
-            "url": "/number", 
-            "description": "generate a random number" 
-        }, 
-        { 
-            "url": "/letter", 
-            "description": "generate a random letter" 
-        }, 
-        { 
-            "url": "/rock-paper-scissors", 
-            "description": "generate a random rock - papers - scissors option" 
-        } ] 
-}
-````
-
-### GET /number
-Generates a random integer between 0 and 99.
-
-Example response:
-````
-{ 
-    "description": "Generates a random number", 
-    "value": 42, 
-    "timestamp": "2026-09-06 12:14:42" 
-}
-````
-
-
-### GET /letter
-Generates a random uppercase letter between A and Z.
-
-Example response:
-````
-{ 
-    "description": "Generates a random letter", 
-    "value": "G", 
-    "timestamp": "2026-09-06 12:14:42" 
-}
-````
-
-
-### GET /rock-paper-scissors
-Generates a random option for a rock - paper - scissors game.
-
-Example response:
-````
-{ 
-    "description": "Generates a rock - papers - scissors option", 
-    "value": "paper", 
-    "timestamp": "2026-09-06 12:14:42" 
-}
-````
-
-### GET /history
-
-Returns the most recent generated values stored in MySQL. Use `?limit=10` to request a bounded number of rows (between 1 and 100).
-
-### Health endpoints
-
-- `GET /health/live` reports whether the Node.js process is running.
-- `GET /health/ready` reports whether the API can connect to MySQL.
-
-## MySQL configuration
-
-The API stores every generated value in a `generations` table. Configure the connection with these environment variables:
+## Repository layout
 
 ```text
-DB_HOST (default: 127.0.0.1)
-DB_PORT (default: 3306)
-DB_NAME (default: random_generator)
-DB_USER (default: random_app)
-DB_PASSWORD (default: random_password)
+src/                                  Backend entry point, database, utilities
+public/                               Browser UI
+test/                                Automated tests
+docker/                              Backend, frontend, and Jenkins Dockerfiles
+infra-example/                        Independent network and ALB example
+infrastructure/
+  terraform_wth_modules/
+    ecr/                              Repository bootstrap and local state
+    app/                              Application infrastructure and local state
+  bad_examples/standalone/             Separate standalone Terraform example
+docs/                                 Terraform and Jenkins reference guides
+.github/workflows/ci.yml               Checks and approved image builds/publication
+Jenkinsfile                           Jenkins pipeline
+docker-compose.yml                    Local MySQL/API/Nginx stack
 ```
 
-The Kubernetes manifests provide the non-sensitive values through `mysql-config` and passwords through `mysql-secret`. Docker Compose supplies the same values directly to the API and initializes the local MySQL service with the matching credentials.
+Further documentation:
 
-## Technologies
-- Node.js
-- Express.js
-- JavaScript ES Modules
+- [Network and ALB example](infra-example/README.md)
+- [Custom AMI and Terraform reference](docs/terraform.md#required-custom-ami-contract)
+- [Jenkins setup](docs/jenkins/setup.md)
+- [Jenkins EC2 guide](docs/jenkins/ec2.md)
+- [Jenkins pipeline explanation](docs/jenkins/pipeline-explained.md)
+
+The `docs/` files are supplementary references; use the current Terraform
+READMEs linked above for deployment paths and execution order.
