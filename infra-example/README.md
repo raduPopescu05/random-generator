@@ -1,11 +1,11 @@
 # Network and ALB example
 
 This independent Terraform example creates AWS networking and an HTTP Application
-Load Balancer. It was previously stored in `infra/` and keeps its own local state.
+Load Balancer. It keeps its own local state.
 
 It does not deploy the random-generator application, EC2 instances, MySQL, or ECR
 repositories. For the application infrastructure, see the
-[modular Terraform example](../infrastructure/terraform/modular/README.md).
+[modular Terraform example](../infrastructure/terraform_wth_modules/app/README.md).
 
 ## Resources
 

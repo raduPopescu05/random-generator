@@ -9,11 +9,11 @@ See the [ordered deployment guide](../README.md) for the complete workflow.
 Use Terraform >= 1.11 and < 2.0. From the repository root, for a fresh setup:
 
 ```sh
-cp infrastructure/terraform/ecr/tf.vars.example infrastructure/terraform/ecr/tf.vars
-terraform -chdir=infrastructure/terraform/ecr init
-terraform -chdir=infrastructure/terraform/ecr validate
-terraform -chdir=infrastructure/terraform/ecr plan -var-file=tf.vars -out=ecr.tfplan
-terraform -chdir=infrastructure/terraform/ecr apply ecr.tfplan
+cp infrastructure/terraform_wth_modules/ecr/tf.vars.example infrastructure/terraform_wth_modules/ecr/tf.vars
+terraform -chdir=infrastructure/terraform_wth_modules/ecr init
+terraform -chdir=infrastructure/terraform_wth_modules/ecr validate
+terraform -chdir=infrastructure/terraform_wth_modules/ecr plan -var-file=tf.vars -out=ecr.tfplan
+terraform -chdir=infrastructure/terraform_wth_modules/ecr apply ecr.tfplan
 ```
 
 Review the plan before applying; do not overwrite existing local variable files.
@@ -31,8 +31,8 @@ and region `eu-central-1`. Keep this root as their single Terraform owner.
 All 16 root URL/ARN outputs retain their names, for example:
 
 ```sh
-terraform -chdir=infrastructure/terraform/ecr output -raw ecr_dev_x64_backend_url
-terraform -chdir=infrastructure/terraform/ecr output -raw ecr_dev_x64_backend_arn
+terraform -chdir=infrastructure/terraform_wth_modules/ecr output -raw ecr_dev_x64_backend_url
+terraform -chdir=infrastructure/terraform_wth_modules/ecr output -raw ecr_dev_x64_backend_arn
 ```
 
 Repositories retain mutable tags, default encryption, no lifecycle policy, and
@@ -40,15 +40,14 @@ Repositories retain mutable tags, default encryption, no lifecycle policy, and
 
 ## Existing repositories
 
-The local application state inspected during this refactor had no ECR resources.
-No state migration was performed. An existing repository in AWS still needs to
-be imported if this new state does not already own it.
+Check existing state ownership before creating repositories. An existing
+repository in AWS needs to be imported if this state does not already own it.
 
 For a repository not managed by another state:
 
 ```sh
-terraform -chdir=infrastructure/terraform/ecr import -var-file=tf.vars module.ecr.aws_ecr_repository.dev_x64_backend dev/random-generator-repository/x64/backend
-terraform -chdir=infrastructure/terraform/ecr plan -var-file=tf.vars
+terraform -chdir=infrastructure/terraform_wth_modules/ecr import -var-file=tf.vars module.ecr.aws_ecr_repository.dev_x64_backend dev/random-generator-repository/x64/backend
+terraform -chdir=infrastructure/terraform_wth_modules/ecr plan -var-file=tf.vars
 ```
 
 Repeat for each existing repository. Resource names are `dev_x64_backend`,
@@ -90,8 +89,8 @@ Application infrastructure uses a separate state; destroying it leaves ECR intac
 To review and remove ECR resources intentionally:
 
 ```sh
-terraform -chdir=infrastructure/terraform/ecr plan -destroy -var-file=tf.vars
-terraform -chdir=infrastructure/terraform/ecr destroy -var-file=tf.vars
+terraform -chdir=infrastructure/terraform_wth_modules/ecr plan -destroy -var-file=tf.vars
+terraform -chdir=infrastructure/terraform_wth_modules/ecr destroy -var-file=tf.vars
 ```
 
 Nonempty repositories cannot be destroyed because `force_delete` remains false.

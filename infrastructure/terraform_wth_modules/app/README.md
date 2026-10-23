@@ -47,8 +47,8 @@ There is no fallback image or software installation.
 From the repository root, in PowerShell:
 
 ```powershell
-Set-Location infrastructure/terraform/modular
-Copy-Item ../examples/standalone/tf.vars.example tf.vars
+Set-Location infrastructure/terraform_wth_modules/app
+Copy-Item ../../bad_examples/standalone/tf.vars.example tf.vars
 ```
 
 Edit tf.vars locally. Set your AMI ID, passwords, image URIs, and instance size.
@@ -63,9 +63,7 @@ credentials can be supplied through the standard AWS environment chain with both
 provider key inputs left null. No credentials are passed into the modules.
 
 tf.vars and local state/plans are ignored by the parent .gitignore. The entire
-directory is excluded from the application's Docker build context. No local
-credentials, state, or provider directory were copied from the original example.
-Sensitive markings hide passwords in normal output; state/user data still contain
+directory is excluded from the application's Docker build context. Sensitive markings hide passwords in normal output; state/user data still contain
 database passwords and must be kept private.
 
 ## Validate and optionally deploy
@@ -78,15 +76,8 @@ terraform fmt -check -recursive
 terraform validate
 ```
 
-Keep .terraform.lock.hcl under version control. The original root lock file was
-absent, so this example's lock file was generated offline from the already
-installed AWS provider 6.67.0. Validation passed using that local package.
-The lock currently contains checksums for Windows amd64 only. Before using
-Linux or CI, obtain the additional official checksums with network access:
-
-```powershell
-terraform providers lock -platform=windows_amd64 -platform=linux_amd64
-```
+The repository currently ignores `.terraform.lock.hcl`, local state, variable
+files, saved plans, and provider caches. Preserve your local state.
 
 When you choose to deploy, manually run:
 
@@ -98,9 +89,8 @@ terraform output -raw instance_id
 terraform output -raw session_manager_command
 ```
 
-No AWS plan or apply was run as part of creating this example. Always run these
-commands in this directory, not the repository root. Alternatively, use
-terraform -chdir=infrastructure/terraform/modular from the repository root.
+Run these commands in this directory, not the repository root. Alternatively, use
+terraform -chdir=infrastructure/terraform_wth_modules/app from the repository root.
 
 The app takes time to pull images and become healthy after EC2 creation. Its
 endpoint is HTTP only. Check startup through Session Manager as described in
