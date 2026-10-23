@@ -45,66 +45,26 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose --env-file /dev/null config --quiet
 
-      - name: Check and build images for pull requests
-        if: github.event_name == 'pull_request'
+      - name: Check and build images
         run: |
           docker build --check -f docker/backend/Dockerfile .
           docker build --check -f docker/frontend/Dockerfile .
           docker build -t backend:ci -f docker/backend/Dockerfile .
           docker build -t frontend:ci -f docker/frontend/Dockerfile .
 
-  build-and-publish:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: run-tests
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - environment: development
-            ecr_environment: dev
-          - environment: preprod
-            ecr_environment: preprod
-    environment: ${{ matrix.environment }}
-    concurrency:
-      group: ecr-publish-${{ matrix.environment }}
-      cancel-in-progress: false
-    env:
-      TARGET_ENVIRONMENT: ${{ matrix.ecr_environment }}
-      IMAGE_TAG: ${{ github.run_number }}
-      ECR_REGISTRY: 834251003876.dkr.ecr.eu-central-1.amazonaws.com
-    steps:
-      - name: Verify required reviewers are configured
+      - name: Show publication options
         env:
-          ENVIRONMENT_API: ${{ github.api_url }}/repos/${{ github.repository }}/environments/${{ matrix.environment }}
+          WORKFLOWS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/workflows
         run: |
-          # Fail closed if this public repository's environment has no approval rule.
-          curl --fail --silent --show-error "$ENVIRONMENT_API" |
-            jq -e 'any(.protection_rules[]?; .type == "required_reviewers" and (.reviewers | length) > 0)'
-      - uses: actions/checkout@v5
-      - name: Build x64 images
-        run: |
-          docker build --check -f docker/backend/Dockerfile .
-          docker build --check -f docker/frontend/Dockerfile .
-          docker build --platform linux/amd64 -t "backend:$IMAGE_TAG" -f docker/backend/Dockerfile .
-          docker build --platform linux/amd64 -t "frontend:$IMAGE_TAG" -f docker/frontend/Dockerfile .
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-region: eu-central-1
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - name: Log in to ECR
-        run: aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-      - name: Push images and report their URLs
-        run: |
-          echo "## $TARGET_ENVIRONMENT — x64 — build $IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
-          echo "Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          for service in backend frontend; do
-            repository="$ECR_REGISTRY/$TARGET_ENVIRONMENT/random-generator-repository/x64/$service"
-            docker tag "$service:$IMAGE_TAG" "$repository:$IMAGE_TAG"
-            docker push "$repository:$IMAGE_TAG"
-            docker tag "$service:$IMAGE_TAG" "$repository:latest"
-            docker push "$repository:latest"
-            echo "$service: $repository:$IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
-          done
+          {
+            echo '## CI passed. Do you want to publish?'
+            echo
+            echo '- **No:** nothing else to do. This CI run completes successfully.'
+            echo "- [Publish Dev]($WORKFLOWS_URL/publish-dev.yml)"
+            echo "- [Publish Preprod]($WORKFLOWS_URL/publish-preprod.yml)"
+            echo
+            echo 'These links open the workflows; they do not start publication.'
+            echo 'Choose Run workflow, select main, and start the desired workflow.'
+            echo 'Publication checks the main commit selected when you start it, then builds and publishes after environment approval.'
+            echo 'For a pull request, merge it first to publish its changes. The publication workflows must exist on main.'
+          } >> "$GITHUB_STEP_SUMMARY"

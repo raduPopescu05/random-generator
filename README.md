@@ -113,16 +113,30 @@ Both Dockerfiles use the repository root as their build context.
 requests targeting `main`. Automatic runs install dependencies, run tests,
 validate Compose, and check/build both application images without publishing.
 
-Pushes to `main` automatically install dependencies, run tests, and validate
-Compose. After successful checks, the `build-and-publish` job waits for approval
-independently for `development` and `preprod`. Approve either or both environments in the
-workflow run. Each approved job builds the backend and frontend x64 images
-(`linux/amd64`) and pushes them to ECR on the same runner.
+CI completes after validation; it never waits for publication approval. Its
+successful summary includes **Publish Dev** and **Publish Preprod** links.
+If you do not want to publish, take no action. The links open the workflows;
+you still select **Run workflow** and `main` to start publication. For a PR,
+merge first: publication builds the `main` commit selected at dispatch, not
+the earlier CI validation images.
+Choose the target **before starting** a separate publication workflow:
 
-No release image is built before approval. Approving both environments runs one
-build-and-publish job for each environment. Pull requests still build validation
-images automatically and cannot publish. All steps are in `ci.yml`; no image
-archives or artifact transfers are needed.
+| Workflow | GitHub environment | ECR path |
+| --- | --- | --- |
+| [Publish Dev](.github/workflows/publish-dev.yml) | `development` | `dev/.../x64/` |
+| [Publish Preprod](.github/workflows/publish-preprod.yml) | `preprod` | `preprod/.../x64/` |
+
+After these files are merged to `main`, open **Actions → Publish Dev** or
+**Publish Preprod → Run workflow**, select `main`, and start the run. Each workflow
+installs dependencies and checks the selected commit, then waits for approval of
+only its own environment. Approving starts a single job that builds and pushes
+both x64 images. The other environment has no job to approve, reject, or cancel.
+Runs selected on other branches skip the jobs and cannot publish.
+
+Release builds start after approval; there are no image archives or artifact
+transfers. Tests, checkout, build and summary refer to the same run commit even
+if `main` advances while waiting. Existing runs created by the old matrix are
+not changed by this update; cancel unwanted waiting runs once.
 
 ### Configure publication approvals
 
@@ -143,7 +157,10 @@ Images are published under:
 ```
 
 Each image also receives `latest`. Publishing is serialized per environment;
-an older approved run can move `latest` backward. Use run-number tags for
+an older approved run can move `latest` backward. Run numbers are independent
+for Publish Dev and Publish Preprod, and start fresh for these workflows. They
+can overlap older CI tags in the same repository; tags remain mutable. Use the
+exact URI and source commit from the publication summary. Use run-number tags for
 deployment. The summary reports the commit, environment, build number and image
 URIs. CI does not create infrastructure or deploy the application.
 
@@ -155,7 +172,7 @@ Local builds are separate from the x64-only ECR publishing pipeline.
 Follow the [Terraform deployment guide](infrastructure/terraform_wth_modules/README.md):
 
 1. Create repositories locally using the [ECR root](infrastructure/terraform_wth_modules/ecr/README.md).
-2. Let CI run checks, then approve building and publishing to the desired environment.
+2. Choose Publish Dev or Publish Preprod, run it on `main`, and approve that publication.
    Use the published `x64` image URIs for the current application AMI.
 3. Apply the [application root](infrastructure/terraform_wth_modules/app/README.md) locally with the published image URIs.
 
@@ -177,7 +194,9 @@ infrastructure/
     app/                              Application infrastructure and local state
   bad_examples/standalone/             Separate standalone Terraform example
 docs/                                 Terraform and Jenkins reference guides
-.github/workflows/ci.yml               Checks and approved image builds/publication
+.github/workflows/ci.yml               Automatic validation
+.github/workflows/publish-dev.yml      Development publication
+.github/workflows/publish-preprod.yml  Preprod publication
 Jenkinsfile                           Jenkins pipeline
 docker-compose.yml                    Local MySQL/API/Nginx stack
 ```

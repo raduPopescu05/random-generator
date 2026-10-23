@@ -38,11 +38,11 @@ If repositories already exist, follow the [import and ownership instructions](ec
 
 ## 2. Publish images with CI
 
-A push or merge to `main` automatically runs checks. Open the CI run and approve the
-`development` and/or `preprod` build-and-publish jobs.
-The `development` GitHub environment publishes to the `dev` ECR repositories;
-`preprod` publishes to the `preprod` repositories.
-Reject unwanted publication jobs; leaving them unreviewed leaves them waiting.
+A push or merge to `main` runs validation only. To publish, choose **Actions →
+Publish Dev** or **Publish Preprod → Run workflow**, select `main`, and start it.
+That workflow runs checks and requests approval for only its own environment.
+`development` publishes to the `dev` ECR repositories; `preprod` publishes to
+`preprod`. The other environment does not create a waiting job.
 Both environments must have required reviewers and main-only branch rules;
 follow the [approval setup](../../README.md#configure-publication-approvals).
 
