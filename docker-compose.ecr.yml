@@ -1,0 +1,8 @@
+# Explicit override for published images; local builds remain in docker-compose.yml.
+services:
+  api:
+    build: !reset null
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to the published backend image URI}
+  web:
+    build: !reset null
+    image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to the published frontend image URI}

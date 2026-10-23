@@ -1,36 +1,30 @@
 #!/usr/bin/env bash
-
-# Stop the script as soon as any command fails.
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-# Create development.env in the repository root before running this script.
-# development.env must define AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
-# AWS_REGION, and ECR_REGISTRY. Keep that file private; it is ignored by Git.
-#
-# set -a exports variables assigned while sourcing the file so child commands
-# such as aws and docker can read the AWS and ECR values.
+# Copy development.env.example to development.env and set published image URIs.
+# AWS authentication uses your profile or exported credentials.
 set -a
 source development.env
-# Stop automatically exporting variables after development.env is loaded.
 set +a
 
-# Get an ECR password from AWS and use it to authenticate Docker.
+: "${AWS_REGION:?Set AWS_REGION in development.env}"
+: "${ECR_REGISTRY:?Set ECR_REGISTRY in development.env}"
+: "${BACKEND_IMAGE:?Set BACKEND_IMAGE in development.env}"
+: "${FRONTEND_IMAGE:?Set FRONTEND_IMAGE in development.env}"
+compose=(docker compose -f docker-compose.yml -f docker-compose.ecr.yml)
+"${compose[@]}" config --quiet
+
 echo "Logging Docker into $ECR_REGISTRY..."
 aws ecr get-login-password --region "$AWS_REGION" |
     docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-# Pull the backend and frontend latest images configured in docker-compose.yml.
-echo "Pulling ECR images..."
-docker compose pull
+echo "Pulling published images..."
+"${compose[@]}" pull
 
-# Start the database, backend, and frontend services in the background.
 echo "Starting services..."
-docker compose up -d
-
-# Display the current status of the Compose services.
-echo "Service status:"
-docker compose ps
+"${compose[@]}" up -d --no-build
+"${compose[@]}" ps

@@ -48,7 +48,7 @@ From the repository root, in PowerShell:
 
 ```powershell
 Set-Location infrastructure/terraform_wth_modules/app
-Copy-Item ../../bad_examples/standalone/tf.vars.example tf.vars
+Copy-Item tf.vars.example tf.vars
 ```
 
 Edit tf.vars locally. Set your AMI ID, passwords, image URIs, and instance size.

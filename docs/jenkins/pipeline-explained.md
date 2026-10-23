@@ -56,11 +56,6 @@ pipeline {
                 // It is normally preferred over "npm install" in CI pipelines
                 // because it provides reproducible dependency installation.
 
-                sleep time: 5, unit: 'SECONDS'
-                // Pauses the pipeline for 5 seconds.
-                //
-                // This is usually not necessary unless the delay was added
-                // intentionally for demonstration/debugging purposes.
             }
         }
 
@@ -96,8 +91,6 @@ pipeline {
                     // test-results/junit.xml
                 '''
 
-                sleep time: 5, unit: 'SECONDS'
-                // Waits 5 seconds after the tests finish.
             }
 
             post {
@@ -160,8 +153,6 @@ pipeline {
                         }
                     }
 
-                    sleep time: 5, unit: 'SECONDS'
-                    // Waits 5 seconds after validation completes.
                 }
             }
         }
@@ -218,8 +209,6 @@ pipeline {
                     // "." is still used as the Docker build context.
                 '''
 
-                sleep time: 5, unit: 'SECONDS'
-                // Waits 5 seconds after the Docker builds complete.
             }
         }
 
@@ -330,8 +319,6 @@ pipeline {
                     // Pushes the frontend image using the "latest" tag.
                 '''
 
-                sleep time: 5, unit: 'SECONDS'
-                // Waits 5 seconds after all Docker images have been pushed.
             }
         }
     }

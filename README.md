@@ -147,13 +147,36 @@ The two Terraform roots use separate local state. Application teardown leaves
 ECR repositories and images intact. Keep region, account, image architecture,
 and the prepared AMI consistent across the stages.
 
-To use ECR images with local Compose, replace its commented legacy image URLs
-with the desired environment/architecture/build-number URIs, enable `image`, and
-remove each application's `build` setting. The existing comments omit the
-architecture segment. The helper `bash scripts/run-ecr-compose.sh` loads
-root-level `development.env` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
-`AWS_REGION`, `ECR_REGISTRY`), logs in, pulls, and starts Compose. It expects the
-image configuration to be prepared first.
+### Run published ECR images locally
+
+Local builds continue to use `docker-compose.yml`. The explicit override
+`docker-compose.ecr.yml` selects published images and removes the build settings.
+Use a current Docker Compose release supporting the
+[`!reset` merge tag](https://docs.docker.com/reference/compose-file/merge/#reset-value).
+
+```sh
+cp development.env.example development.env
+```
+
+Edit `development.env` with your region, registry, and full `BACKEND_IMAGE` and
+`FRONTEND_IMAGE` URIs from CI. Use the architecture matching your local machine.
+Authenticate AWS through your profile or exported credentials, then run:
+
+```sh
+bash scripts/run-ecr-compose.sh
+```
+
+The helper loads the environment, validates the merged configuration, logs in,
+pulls images, and starts Compose without building. No edits to the base Compose
+file are needed. The same database volume and host port settings are retained.
+To stop the stack, load the same variables and select both files:
+
+```sh
+set -a
+source development.env
+set +a
+docker compose -f docker-compose.yml -f docker-compose.ecr.yml down
+```
 
 ## Repository layout
 
@@ -173,6 +196,8 @@ docs/                                 Terraform and Jenkins reference guides
 .github/workflows/ci.yml               GitHub Actions workflow
 Jenkinsfile                           Jenkins pipeline
 docker-compose.yml                    Local MySQL/API/Nginx stack
+docker-compose.ecr.yml                Published-image override
+development.env.example               ECR runner configuration template
 ```
 
 Further documentation:
