@@ -38,13 +38,14 @@ If repositories already exist, follow the [import and ownership instructions](ec
 
 ## 2. Publish images with CI
 
-A push or merge to `main` automatically runs checks and builds x64 images. Open the CI run and approve the `dev` and/or `preprod` publication jobs.
+A push or merge to `main` automatically runs checks. Open the CI run and approve the
+`dev` and/or `preprod` build-and-publish jobs.
 Reject unwanted publication jobs; leaving them unreviewed leaves them waiting.
 Both environments must have required reviewers and main-only branch rules;
 follow the [approval setup](../../README.md#configure-publication-approvals).
 
-Each approved job publishes the saved images for x64 without
-rebuilding. Artifacts expire after 30 days; missing artifacts fail publication.
+Each approved job builds both x64 images and pushes them on the same runner.
+Release builds start only after approval; no image artifacts are transferred.
 Copy the x64 `BACKEND_IMAGE` and `FRONTEND_IMAGE` values from the summary for the
 current x86-64 application AMI. The summary identifies the commit, build number,
 environment, and architecture.

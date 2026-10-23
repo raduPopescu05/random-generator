@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   build-code:
@@ -54,34 +53,9 @@ jobs:
           docker build -t backend:ci -f docker/backend/Dockerfile .
           docker build -t frontend:ci -f docker/frontend/Dockerfile .
 
-  build-images:
+  build-and-publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: run-tests
-    runs-on: ubuntu-latest
-    env:
-      IMAGE_TAG: ${{ github.run_number }}
-    steps:
-      - uses: actions/checkout@v5
-      - name: Build x64 images
-        run: |
-          docker build --check -f docker/backend/Dockerfile .
-          docker build --check -f docker/frontend/Dockerfile .
-          docker build --platform linux/amd64 -t "backend:$IMAGE_TAG" -f docker/backend/Dockerfile .
-          docker build --platform linux/amd64 -t "frontend:$IMAGE_TAG" -f docker/frontend/Dockerfile .
-      - name: Save images
-        run: docker save -o images.tar "backend:$IMAGE_TAG" "frontend:$IMAGE_TAG"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: images-${{ github.run_id }}
-          path: images.tar
-          retention-days: 30
-          compression-level: 0
-          if-no-files-found: error
-          overwrite: true
-
-  publish:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build-images
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -103,11 +77,13 @@ jobs:
           # Fail closed if this public repository's environment has no approval rule.
           curl --fail --silent --show-error "$ENVIRONMENT_API" |
             jq -e 'any(.protection_rules[]?; .type == "required_reviewers" and (.reviewers | length) > 0)'
-      - uses: actions/download-artifact@v4
-        with:
-          name: images-${{ github.run_id }}
-      - name: Load images
-        run: docker load -i images.tar
+      - uses: actions/checkout@v5
+      - name: Build x64 images
+        run: |
+          docker build --check -f docker/backend/Dockerfile .
+          docker build --check -f docker/frontend/Dockerfile .
+          docker build --platform linux/amd64 -t "backend:$IMAGE_TAG" -f docker/backend/Dockerfile .
+          docker build --platform linux/amd64 -t "frontend:$IMAGE_TAG" -f docker/frontend/Dockerfile .
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:

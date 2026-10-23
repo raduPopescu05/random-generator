@@ -39,8 +39,8 @@ terraform output -raw ecr_dev_x64_backend_arn
 ```
 
 Repositories retain mutable tags, default encryption, no lifecycle policy, and
-`force_delete = false`. CI automatically builds x64 on pushes to `main`; environment
-approval releases those images to ECR. This root does not build or publish images.
+`force_delete = false`. CI automatically runs checks on pushes to `main`; environment
+approval starts the x64 build and push to ECR in one job. This root does not build or publish images.
 
 ## Existing repositories
 

@@ -113,14 +113,16 @@ Both Dockerfiles use the repository root as their build context.
 requests targeting `main`. Automatic runs install dependencies, run tests,
 validate Compose, and check/build both application images without publishing.
 
-Pushes to `main` automatically build backend and frontend images for x64
-(`linux/amd64`) after checks pass. A single image artifact is kept for 30 days.
-Pull requests run validation builds only and cannot publish.
+Pushes to `main` automatically install dependencies, run tests, and validate
+Compose. After successful checks, the `build-and-publish` job waits for approval
+independently for `dev` and `preprod`. Approve either or both environments in the
+workflow run. Each approved job builds the backend and frontend x64 images
+(`linux/amd64`) and pushes them to ECR on the same runner.
 
-The `publish` job runs independently for `dev` and `preprod`. Approve either or
-both environments in the workflow run. Each approved job loads the saved images
-and pushes them without rebuilding. Missing or expired artifacts fail publication.
-All steps are in `ci.yml`; there is no separate publishing workflow.
+No release image is built before approval. Approving both environments runs one
+build-and-publish job for each environment. Pull requests still build validation
+images automatically and cannot publish. All steps are in `ci.yml`; no image
+archives or artifact transfers are needed.
 
 ### Configure publication approvals
 
@@ -150,7 +152,7 @@ Local builds are separate from the x64-only ECR publishing pipeline.
 Follow the [Terraform deployment guide](infrastructure/terraform_wth_modules/README.md):
 
 1. Create repositories locally using the [ECR root](infrastructure/terraform_wth_modules/ecr/README.md).
-2. Let CI build x64 images, then approve publication to the desired environment.
+2. Let CI run checks, then approve building and publishing to the desired environment.
    Use the published `x64` image URIs for the current application AMI.
 3. Apply the [application root](infrastructure/terraform_wth_modules/app/README.md) locally with the published image URIs.
 
@@ -172,7 +174,7 @@ infrastructure/
     app/                              Application infrastructure and local state
   bad_examples/standalone/             Separate standalone Terraform example
 docs/                                 Terraform and Jenkins reference guides
-.github/workflows/ci.yml               Automatic checks and image builds
+.github/workflows/ci.yml               Checks and approved image builds/publication
 Jenkinsfile                           Jenkins pipeline
 docker-compose.yml                    Local MySQL/API/Nginx stack
 ```
