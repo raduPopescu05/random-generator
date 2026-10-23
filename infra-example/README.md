@@ -69,22 +69,25 @@ separately; do not put credentials into these Terraform source files.
 From the repository root:
 
 ```sh
-terraform -chdir=infra-example init
-terraform -chdir=infra-example fmt -check -recursive
-terraform -chdir=infra-example validate
-terraform -chdir=infra-example plan -out=deployment.tfplan
+cd infra-example
+terraform init
+terraform fmt -check -recursive
+terraform validate
+terraform plan -out=deployment.tfplan
 ```
+
+Keep running the following commands from `infra-example/`.
 
 With a local overrides file, replace the plan command with:
 
 ```sh
-terraform -chdir=infra-example plan -var-file=tf.vars -out=deployment.tfplan
+terraform plan -var-file=tf.vars -out=deployment.tfplan
 ```
 
 Review the saved plan before applying it:
 
 ```sh
-terraform -chdir=infra-example apply deployment.tfplan
+terraform apply deployment.tfplan
 ```
 
 The ALB, NAT gateway, and public IPv4 allocation incur AWS charges even without
@@ -100,8 +103,8 @@ saved plans, and the lockfile are ignored by the repository's current Git rules.
 To review and remove resources created by this example:
 
 ```sh
-terraform -chdir=infra-example plan -destroy
-terraform -chdir=infra-example destroy
+terraform plan -destroy
+terraform destroy
 ```
 
 Add `-var-file=tf.vars` to both commands if you deployed with that file. Destroy

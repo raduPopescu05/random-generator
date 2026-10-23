@@ -2,7 +2,7 @@
 
 Run Terraform locally in two independent roots. Each has its own `tf.vars` and
 local `terraform.tfstate`; image URIs connect the steps, not shared state.
-All commands below start from the repository root.
+Start at the repository root, then follow the directory changes shown below.
 
 | Directory | Owns | When to run |
 | --- | --- | --- |
@@ -21,13 +21,14 @@ Terraform region alone does not change CI's publishing destination.
 For a fresh setup, copy the example and review the repository names:
 
 ```sh
-cp infrastructure/terraform_wth_modules/ecr/tf.vars.example infrastructure/terraform_wth_modules/ecr/tf.vars
-terraform -chdir=infrastructure/terraform_wth_modules/ecr init
-terraform -chdir=infrastructure/terraform_wth_modules/ecr fmt -check -recursive
-terraform -chdir=infrastructure/terraform_wth_modules/ecr validate
-terraform -chdir=infrastructure/terraform_wth_modules/ecr plan -var-file=tf.vars -out=ecr.tfplan
-terraform -chdir=infrastructure/terraform_wth_modules/ecr apply ecr.tfplan
-terraform -chdir=infrastructure/terraform_wth_modules/ecr output
+cd infrastructure/terraform_wth_modules/ecr
+cp tf.vars.example tf.vars
+terraform init
+terraform fmt -check -recursive
+terraform validate
+terraform plan -var-file=tf.vars -out=ecr.tfplan
+terraform apply ecr.tfplan
+terraform output
 ```
 
 Do not overwrite an existing local variables file. This stage needs no AMI,
@@ -77,50 +78,27 @@ docker image inspect --format '{{.Os}}/{{.Architecture}}' 834251003876.dkr.ecr.e
 Both should report `linux/amd64`. Stop if image lookup, pulling, region, or
 architecture verification fails.
 
-## 3. Deploy the application locally
-
-For a fresh setup, copy the standalone example variables as a starting point:
-
-```sh
-cp infrastructure/bad_examples/standalone/tf.vars.example infrastructure/terraform_wth_modules/app/tf.vars
-```
-
-Do not overwrite an existing `tf.vars`. Set the prepared x86-64 AMI, database
-passwords, region, and the exact `BACKEND_IMAGE` and `FRONTEND_IMAGE` values from
-CI. The AMI must satisfy the [custom AMI contract](../../docs/terraform.md#required-custom-ami-contract).
-ECR repository variables belong only in `ecr/tf.vars`.
-
-```sh
-terraform -chdir=infrastructure/terraform_wth_modules/app init
-terraform -chdir=infrastructure/terraform_wth_modules/app fmt -check -recursive
-terraform -chdir=infrastructure/terraform_wth_modules/app validate
-terraform -chdir=infrastructure/terraform_wth_modules/app plan -var-file=tf.vars -out=deployment.tfplan
-terraform -chdir=infrastructure/terraform_wth_modules/app apply deployment.tfplan
-terraform -chdir=infrastructure/terraform_wth_modules/app output -raw application_url
-```
-
-Review the saved plan before applying. Allow cloud-init and health checks to
-finish. See the [application guide](app/README.md) for startup and access.
-
 ## State and cleanup
 
 Each root owns separate local state. Preserve state files and never copy them
 between roots. Local variables, state, plans, provider caches, and lockfiles are
 ignored by the current repository rules.
 
-Remove application infrastructure independently:
+From the repository root, enter the application directory to remove its infrastructure:
 
 ```sh
-terraform -chdir=infrastructure/terraform_wth_modules/app plan -destroy -var-file=tf.vars
-terraform -chdir=infrastructure/terraform_wth_modules/app destroy -var-file=tf.vars
+cd infrastructure/terraform_wth_modules/app
+terraform plan -destroy -var-file=tf.vars
+terraform destroy -var-file=tf.vars
 ```
 
 This leaves ECR repositories and images intact. To intentionally remove ECR,
 separately review and run:
 
 ```sh
-terraform -chdir=infrastructure/terraform_wth_modules/ecr plan -destroy -var-file=tf.vars
-terraform -chdir=infrastructure/terraform_wth_modules/ecr destroy -var-file=tf.vars
+cd ../ecr
+terraform plan -destroy -var-file=tf.vars
+terraform destroy -var-file=tf.vars
 ```
 
 Repositories containing images cannot be deleted with `force_delete = false`.

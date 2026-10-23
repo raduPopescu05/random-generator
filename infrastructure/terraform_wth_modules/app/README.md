@@ -89,8 +89,7 @@ terraform output -raw instance_id
 terraform output -raw session_manager_command
 ```
 
-Run these commands in this directory, not the repository root. Alternatively, use
-terraform -chdir=infrastructure/terraform_wth_modules/app from the repository root.
+Run these commands from the `app/` directory.
 
 The app takes time to pull images and become healthy after EC2 creation. Its
 endpoint is HTTP only. Check startup through Session Manager as described in
