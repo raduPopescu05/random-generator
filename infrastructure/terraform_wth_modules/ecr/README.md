@@ -1,6 +1,6 @@
 # ECR repository bootstrap
 
-This Terraform root creates only eight private ECR repositories. Run it before
+This Terraform root creates only four private ECR repositories. Run it before
 publishing images, then deploy the application with the published image URIs.
 See the [ordered deployment guide](../README.md) for the complete workflow.
 
@@ -26,12 +26,12 @@ profile/environment chain, or the optional sensitive `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY` inputs. Default tags match the application root.
 No AMI, database credentials, or application image inputs are required.
 
-The eight required `ECR_*` inputs in `tf.vars.example` preserve existing names:
-`{dev,preprod}/random-generator-repository/{x64,arm}/{backend,frontend}`.
+The four required `ECR_*` inputs in `tf.vars.example` preserve existing names:
+`{dev,preprod}/random-generator-repository/x64/{backend,frontend}`.
 They must match the CI destinations; CI currently uses account `834251003876`
 and region `eu-central-1`. Keep this root as their single Terraform owner.
 
-All 16 root URL/ARN outputs retain their names, for example:
+All eight root URL/ARN outputs retain their names, for example:
 
 ```sh
 terraform output -raw ecr_dev_x64_backend_url
@@ -39,7 +39,8 @@ terraform output -raw ecr_dev_x64_backend_arn
 ```
 
 Repositories retain mutable tags, default encryption, no lifecycle policy, and
-`force_delete = false`. This root does not build or publish container images.
+`force_delete = false`. CI automatically builds x64 on pushes to `main`; environment
+approval releases those images to ECR. This root does not build or publish images.
 
 ## Existing repositories
 
@@ -54,8 +55,7 @@ terraform plan -var-file=tf.vars
 ```
 
 Repeat for each existing repository. Resource names are `dev_x64_backend`,
-`dev_x64_frontend`, `dev_arm_backend`, `dev_arm_frontend`, `preprod_x64_backend`,
-`preprod_x64_frontend`, `preprod_arm_backend`, and `preprod_arm_frontend`.
+`dev_x64_frontend`, `preprod_x64_backend`, and `preprod_x64_frontend`.
 The import ID is the corresponding repository name from your variables.
 Do not delete repositories to resolve name conflicts.
 
@@ -98,3 +98,8 @@ terraform destroy -var-file=tf.vars
 
 Nonempty repositories cannot be destroyed because `force_delete` remains false.
 Keep state until cleanup is complete.
+
+If repositories removed from this configuration are already managed in your
+local state, the next plan will propose deleting them. Review that plan before
+applying; nonempty repositories remain protected by `force_delete = false`.
+Remove obsolete repository assignments from your local `tf.vars` as well.

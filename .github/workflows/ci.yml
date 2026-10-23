@@ -6,28 +6,12 @@ on:
   pull_request:
     branches: [ main ]
 
-  workflow_dispatch:
-    inputs:
-      target_environment:
-        description: Environment to publish images to
-        required: true
-        default: dev
-        type: choice
-        options:
-          - dev
-          - preprod
-      architecture:
-        description: Image architecture to publish to ECR
-        required: true
-        default: arm
-        type: choice
-        options:
-          - x64
-          - arm
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   build-code:
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -62,99 +46,85 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose --env-file /dev/null config --quiet
 
-      - name: Check and build images for automatic runs
-        if: github.event_name != 'workflow_dispatch'
+      - name: Check and build images for pull requests
+        if: github.event_name == 'pull_request'
         run: |
           docker build --check -f docker/backend/Dockerfile .
           docker build --check -f docker/frontend/Dockerfile .
           docker build -t backend:ci -f docker/backend/Dockerfile .
           docker build -t frontend:ci -f docker/frontend/Dockerfile .
 
-  build-dockerfile-and-push-to-ECR:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    environment: ${{ inputs.target_environment }}
-    env:
-      IMAGE_TAG: ${{ github.run_number }}
+  build-images:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: run-tests
     runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ${{ github.run_number }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Validate Compose configuration
-        run: docker compose --env-file /dev/null config --quiet
-
-      - name: Check Dockerfile for backend
-        run: docker build --check -f docker/backend/Dockerfile .
-
-      - name: Check Dockerfile for frontend
-        run: docker build --check -f docker/frontend/Dockerfile .
-
-      - name: Select image environment and architecture
-        env:
-          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
-          ARCHITECTURE: ${{ inputs.architecture }}
+      - uses: actions/checkout@v5
+      - name: Build x64 images
         run: |
-          case "$TARGET_ENVIRONMENT" in
-            dev|preprod) ;;
-            *) echo "Unsupported environment: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
-          esac
-          case "$ARCHITECTURE" in
-            x64) platform=linux/amd64 ;;
-            arm) platform=linux/arm64 ;;
-            *) echo "Unsupported architecture: $ARCHITECTURE" >&2; exit 1 ;;
-          esac
-          echo "IMAGE_PLATFORM=$platform" >> "$GITHUB_ENV"
-          echo "ECR_IMAGE_PREFIX=834251003876.dkr.ecr.eu-central-1.amazonaws.com/$TARGET_ENVIRONMENT/random-generator-repository/$ARCHITECTURE" >> "$GITHUB_ENV"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+          docker build --check -f docker/backend/Dockerfile .
+          docker build --check -f docker/frontend/Dockerfile .
+          docker build --platform linux/amd64 -t "backend:$IMAGE_TAG" -f docker/backend/Dockerfile .
+          docker build --platform linux/amd64 -t "frontend:$IMAGE_TAG" -f docker/frontend/Dockerfile .
+      - name: Save images
+        run: docker save -o images.tar "backend:$IMAGE_TAG" "frontend:$IMAGE_TAG"
+      - uses: actions/upload-artifact@v4
         with:
-          platforms: arm64
+          name: images-${{ github.run_id }}
+          path: images.tar
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
+          overwrite: true
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build backend Image
-        run: docker buildx build --platform "$IMAGE_PLATFORM" --load --tag "backend:$IMAGE_TAG" --tag backend:latest -f docker/backend/Dockerfile .
-
-      - name: Build frontend Image
-        run: docker buildx build --platform "$IMAGE_PLATFORM" --load --tag "frontend:$IMAGE_TAG" --tag frontend:latest -f docker/frontend/Dockerfile .
-
-      - name: Configure AWS Credentials
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, preprod]
+    environment: ${{ matrix.environment }}
+    concurrency:
+      group: ecr-publish-${{ matrix.environment }}
+      cancel-in-progress: false
+    env:
+      TARGET_ENVIRONMENT: ${{ matrix.environment }}
+      IMAGE_TAG: ${{ github.run_number }}
+      ECR_REGISTRY: 834251003876.dkr.ecr.eu-central-1.amazonaws.com
+    steps:
+      - name: Verify required reviewers are configured
+        env:
+          ENVIRONMENT_API: ${{ github.api_url }}/repos/${{ github.repository }}/environments/${{ matrix.environment }}
+        run: |
+          # Fail closed if this public repository's environment has no approval rule.
+          curl --fail --silent --show-error "$ENVIRONMENT_API" |
+            jq -e 'any(.protection_rules[]?; .type == "required_reviewers" and (.reviewers | length) > 0)'
+      - uses: actions/download-artifact@v4
+        with:
+          name: images-${{ github.run_id }}
+      - name: Load images
+        run: docker load -i images.tar
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: eu-central-1
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Authenticate with Amazon ECR
-        run: aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 834251003876.dkr.ecr.eu-central-1.amazonaws.com
-
-      - name: Push backend image
+      - name: Log in to ECR
+        run: aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+      - name: Push images and report their URLs
         run: |
-          docker tag "backend:$IMAGE_TAG" "$ECR_IMAGE_PREFIX/backend:$IMAGE_TAG"
-          docker push "$ECR_IMAGE_PREFIX/backend:$IMAGE_TAG"
-          docker tag backend:latest "$ECR_IMAGE_PREFIX/backend:latest"
-          docker push "$ECR_IMAGE_PREFIX/backend:latest"
-
-      - name: Push frontend image
-        run: |
-          docker tag "frontend:$IMAGE_TAG" "$ECR_IMAGE_PREFIX/frontend:$IMAGE_TAG"
-          docker push "$ECR_IMAGE_PREFIX/frontend:$IMAGE_TAG"
-          docker tag frontend:latest "$ECR_IMAGE_PREFIX/frontend:latest"
-          docker push "$ECR_IMAGE_PREFIX/frontend:latest"
-
-      - name: Report published deployment images
-        run: |
-          {
-            echo '## Published deployment images'
-            echo
-            echo "Platform: $IMAGE_PLATFORM"
-            echo
-            echo 'Copy these values into the application Terraform tf.vars:'
-            echo '```hcl'
-            printf 'BACKEND_IMAGE = "%s/backend:%s"\n' "$ECR_IMAGE_PREFIX" "$IMAGE_TAG"
-            printf 'FRONTEND_IMAGE = "%s/frontend:%s"\n' "$ECR_IMAGE_PREFIX" "$IMAGE_TAG"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "## $TARGET_ENVIRONMENT — x64 — build $IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          for service in backend frontend; do
+            repository="$ECR_REGISTRY/$TARGET_ENVIRONMENT/random-generator-repository/x64/$service"
+            docker tag "$service:$IMAGE_TAG" "$repository:$IMAGE_TAG"
+            docker push "$repository:$IMAGE_TAG"
+            docker tag "$service:$IMAGE_TAG" "$repository:latest"
+            docker push "$repository:latest"
+            echo "$service: $repository:$IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          done

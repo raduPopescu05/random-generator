@@ -27,7 +27,8 @@ Both database password inputs remain sensitive through the module boundary.
 
 ## Deployment order
 
-First create ECR repositories, then publish x64 images with CI, then apply this
+First create ECR repositories, let CI build x64 images, approve publication,
+then select the x64 image URIs and apply this
 root. Follow the [three-step guide](../README.md). Set `BACKEND_IMAGE` and
 `FRONTEND_IMAGE` to the full build-number-tagged URIs reported by CI.
 This root has no ECR repository inputs or remote-state dependency. If an existing

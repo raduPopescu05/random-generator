@@ -6,7 +6,7 @@ Start at the repository root, then follow the directory changes shown below.
 
 | Directory | Owns | When to run |
 | --- | --- | --- |
-| `ecr/` | Eight ECR repositories and their URL/ARN outputs | Before publishing images |
+| `ecr/` | Four ECR repositories and their URL/ARN outputs | Before publishing images |
 | `app/` | VPC, networking, ALB, EC2 and application IAM | After publishing images |
 | `../bad_examples/standalone/` | Independent application example | Separate example, not a deployment step |
 
@@ -33,21 +33,21 @@ terraform output
 
 Do not overwrite an existing local variables file. This stage needs no AMI,
 application images, or database passwords. It creates repositories for both
-`dev` and `preprod`, both `x64` and `arm`, and both backend and frontend.
+`dev` and `preprod`, `x64`, and both backend and frontend.
 If repositories already exist, follow the [import and ownership instructions](ecr/README.md#existing-repositories) first.
 
 ## 2. Publish images with CI
 
-After the workflow changes are merged to `main`, open **Actions → CI → Run workflow**:
+A push or merge to `main` automatically runs checks and builds x64 images. Open the CI run and approve the `dev` and/or `preprod` publication jobs.
+Reject unwanted publication jobs; leaving them unreviewed leaves them waiting.
+Both environments must have required reviewers and main-only branch rules;
+follow the [approval setup](../../README.md#configure-publication-approvals).
 
-1. Select branch `main`.
-2. Select the desired environment (`dev` or `preprod`).
-3. Select `x64`. The existing application requires an x86-64 custom AMI;
-   the workflow default is still `arm`, so change this explicitly.
-4. Wait for tests, builds, and both image pushes to succeed.
-
-The workflow summary provides `BACKEND_IMAGE` and `FRONTEND_IMAGE` with the
-workflow run number as the tag. Copy those exact values for the next stage.
+Each approved job publishes the saved images for x64 without
+rebuilding. Artifacts expire after 30 days; missing artifacts fail publication.
+Copy the x64 `BACKEND_IMAGE` and `FRONTEND_IMAGE` values from the summary for the
+current x86-64 application AMI. The summary identifies the commit, build number,
+environment, and architecture.
 For example, a dev build numbered 123 produces:
 
 ```hcl
@@ -65,7 +65,7 @@ aws ecr describe-images --region eu-central-1 --registry-id 834251003876 --repos
 aws ecr describe-images --region eu-central-1 --registry-id 834251003876 --repository-name dev/random-generator-repository/x64/frontend --image-ids imageTag=123
 ```
 
-Confirm the successful workflow summary reports `linux/amd64` and both URIs use
+Confirm the successful workflow summary lists the `x64` images and both URIs use
 the deployment account and region. To inspect the published image configuration:
 
 ```sh

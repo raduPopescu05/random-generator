@@ -113,34 +113,45 @@ Both Dockerfiles use the repository root as their build context.
 requests targeting `main`. Automatic runs install dependencies, run tests,
 validate Compose, and check/build both application images without publishing.
 
-For image publication, open **Actions → CI → Run workflow** and select `main`,
-the environment (`dev` or `preprod`), and the architecture:
+Pushes to `main` automatically build backend and frontend images for x64
+(`linux/amd64`) after checks pass. A single image artifact is kept for 30 days.
+Pull requests run validation builds only and cannot publish.
 
-| Selection | Platform | Use |
-| --- | --- | --- |
-| `x64` | `linux/amd64` | Required by the current x86-64 application AMI |
-| `arm` | `linux/arm64` | ARM-compatible environments; current workflow default |
+The `publish` job runs independently for `dev` and `preprod`. Approve either or
+both environments in the workflow run. Each approved job loads the saved images
+and pushes them without rebuilding. Missing or expired artifacts fail publication.
+All steps are in `ci.yml`; there is no separate publishing workflow.
 
-Publishing is manual and only runs on `main`. Configure GitHub Environments
-`dev` and `preprod` with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets
-that allow ECR login and image pushes. Repositories must already exist.
+### Configure publication approvals
 
-CI publishes to account `834251003876` in `eu-central-1`:
+In **Settings → Environments**, configure `dev` and `preprod` with required
+reviewers, a deployment branch rule allowing only `main`, and environment secrets
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Allow self-review if you need to
+approve your own runs. Disable administrator bypass if approvals must always be
+enforced. A short check before AWS authentication blocks publishing if required
+reviewers are missing or the public environment metadata cannot be read.
+
+Images are published under:
 
 ```text
-834251003876.dkr.ecr.eu-central-1.amazonaws.com/<environment>/random-generator-repository/<architecture>/<backend-or-frontend>:<run-number>
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/<environment>/random-generator-repository/x64/<backend-or-frontend>:<run-number>
 ```
 
-Both images also receive `latest`. The workflow summary supplies the full
-build-number-tagged `BACKEND_IMAGE` and `FRONTEND_IMAGE` values for deployment.
-Tags remain mutable. CI does not create infrastructure or deploy containers.
+Each image also receives `latest`. Publishing is serialized per environment;
+an older approved run can move `latest` backward. Use run-number tags for
+deployment. The summary reports the commit, environment, build number and image
+URIs. CI does not create infrastructure or deploy the application.
+
+Build images for your local machine using `docker compose up -d --build`.
+Local builds are separate from the x64-only ECR publishing pipeline.
 
 ## AWS deployment order
 
 Follow the [Terraform deployment guide](infrastructure/terraform_wth_modules/README.md):
 
 1. Create repositories locally using the [ECR root](infrastructure/terraform_wth_modules/ecr/README.md).
-2. Publish images through CI, selecting `x64` for the current application AMI.
+2. Let CI build x64 images, then approve publication to the desired environment.
+   Use the published `x64` image URIs for the current application AMI.
 3. Apply the [application root](infrastructure/terraform_wth_modules/app/README.md) locally with the published image URIs.
 
 The two Terraform roots use separate local state. Application teardown leaves
@@ -161,7 +172,7 @@ infrastructure/
     app/                              Application infrastructure and local state
   bad_examples/standalone/             Separate standalone Terraform example
 docs/                                 Terraform and Jenkins reference guides
-.github/workflows/ci.yml               GitHub Actions workflow
+.github/workflows/ci.yml               Automatic checks and image builds
 Jenkinsfile                           Jenkins pipeline
 docker-compose.yml                    Local MySQL/API/Nginx stack
 ```
