@@ -1,0 +1,80 @@
+# Deployment order: ECR → CI images → application
+
+Run Terraform locally in two independent roots. Each has its own `tf.vars` and
+local `terraform.tfstate`; image URIs connect the steps, not shared state.
+All commands below start from the repository root.
+
+| Directory | Owns | When to run |
+| --- | --- | --- |
+| `ecr/` | Eight ECR repositories and their URL/ARN outputs | Before publishing images |
+| `modular/` | VPC, networking, ALB, EC2 and application IAM | After publishing images |
+| `examples/standalone/` | Independent application example | Alternative to modular, not another step |
+
+Use Terraform >= 1.11 and < 2.0, AWS CLI, and authenticated AWS credentials.
+Both roots use `REGION` (default `eu-central-1`) and support the standard AWS
+profile/environment credential chain. Keep the region and account consistent.
+Current CI publishes to account `834251003876` in `eu-central-1`; changing the
+Terraform region alone does not change CI's publishing destination.
+
+## 1. Create ECR repositories locally
+
+For a fresh setup, copy the example and review the repository names:
+
+```sh
+cp infrastructure/terraform/ecr/tf.vars.example infrastructure/terraform/ecr/tf.vars
+go to the ecr folder and run:
+   terraform init
+   terraform fmt -check -recursive
+   terraform validate
+   terraform plan -var-file=tf.vars -out=ecr.tfplan
+   terraform apply ecr.tfplan
+   terraform output
+```
+
+Do not overwrite an existing local variables file. This stage needs no AMI,
+application images, or database passwords. It creates repositories for both
+`dev` and `preprod`, both `x64` and `arm`, and both backend and frontend.
+If repositories already exist, follow the [import and ownership instructions](ecr/README.md#existing-repositories) first.
+
+## 2. Publish images with CI
+
+After the workflow changes are merged to `main`, open **Actions → CI → Run workflow**:
+
+1. Select branch `main`.
+2. Select the desired environment (`dev` or `preprod`).
+3. Select `x64`. The existing application requires an x86-64 custom AMI;
+   the workflow default is still `arm`, so change this explicitly.
+4. Wait for tests, builds, and both image pushes to succeed.
+
+The workflow summary provides `BACKEND_IMAGE` and `FRONTEND_IMAGE` with the
+workflow run number as the tag. Copy those exact values for the next stage.
+For example, a dev build numbered 123 produces:
+
+```hcl
+BACKEND_IMAGE  = "834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/backend:123"
+FRONTEND_IMAGE = "834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/frontend:123"
+```
+
+Use your actual successful run number, not the example or `latest`. Tags remain
+mutable under the existing repository policy; this change does not add immutable tags.
+
+Before deploying, verify both images exist (replace `dev` and `123` as appropriate):
+
+```sh
+aws ecr describe-images --region eu-central-1 --registry-id 834251003876 --repository-name dev/random-generator-repository/x64/backend --image-ids imageTag=123
+aws ecr describe-images --region eu-central-1 --registry-id 834251003876 --repository-name dev/random-generator-repository/x64/frontend --image-ids imageTag=123
+```
+
+Confirm the successful workflow summary reports `linux/amd64` and both URIs use
+the deployment account and region. To inspect the published image configuration:
+
+```sh
+aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 834251003876.dkr.ecr.eu-central-1.amazonaws.com
+docker pull --platform linux/amd64 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/backend:123
+docker pull --platform linux/amd64 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/frontend:123
+docker image inspect --format '{{.Os}}/{{.Architecture}}' 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/backend:123 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/frontend:123
+```
+
+Both should report `linux/amd64`. Stop if image lookup, pulling, region, or
+architecture verification fails.
+

@@ -1,0 +1,10 @@
+REGION = "eu-central-1"
+
+ECR_DEV_X64_BACKEND      = "dev/random-generator-repository/x64/backend"
+ECR_DEV_X64_FRONTEND     = "dev/random-generator-repository/x64/frontend"
+ECR_DEV_ARM_BACKEND      = "dev/random-generator-repository/arm/backend"
+ECR_DEV_ARM_FRONTEND     = "dev/random-generator-repository/arm/frontend"
+ECR_PREPROD_X64_BACKEND  = "preprod/random-generator-repository/x64/backend"
+ECR_PREPROD_X64_FRONTEND = "preprod/random-generator-repository/x64/frontend"
+ECR_PREPROD_ARM_BACKEND  = "preprod/random-generator-repository/arm/backend"
+ECR_PREPROD_ARM_FRONTEND = "preprod/random-generator-repository/arm/frontend"

@@ -15,5 +15,5 @@ crash.*.log
 terraform.tfvars
 .terraform.lock.hcl
 
-terraform/.DS_Store
+.DS_Store
 .DS_Store

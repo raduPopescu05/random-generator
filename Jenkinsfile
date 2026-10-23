@@ -62,11 +62,12 @@ pipeline {
                 sh '''
                     set -eu
                     docker build \
+                        --file docker/backend/Dockerfile \
                         --tag "$BACKEND_IMAGE:$IMAGE_TAG" \
                         --tag "$BACKEND_IMAGE:latest" \
                         .
                     docker build \
-                        --file frontend/Dockerfile \
+                        --file docker/frontend/Dockerfile \
                         --tag "$FRONTEND_IMAGE:$IMAGE_TAG" \
                         --tag "$FRONTEND_IMAGE:latest" \
                         .

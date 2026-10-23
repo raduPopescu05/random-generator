@@ -4,7 +4,7 @@ import {
     generateRandomLetter,
     generateRandomNumber,
     generateRandomRockPaperScissors
-} from '../utils/random.js';
+} from '../src/utils/random.js';
 
 test('random number is always between 0 and 99', () => {
     for (let attempt = 0; attempt < 1000; attempt += 1) {

@@ -65,10 +65,10 @@ jobs:
       - name: Check and build images for automatic runs
         if: github.event_name != 'workflow_dispatch'
         run: |
-          docker build --check .
-          docker build --check -f frontend/Dockerfile .
-          docker build -t backend:ci .
-          docker build -t frontend:ci -f frontend/Dockerfile .
+          docker build --check -f docker/backend/Dockerfile .
+          docker build --check -f docker/frontend/Dockerfile .
+          docker build -t backend:ci -f docker/backend/Dockerfile .
+          docker build -t frontend:ci -f docker/frontend/Dockerfile .
 
   build-dockerfile-and-push-to-ECR:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -85,10 +85,10 @@ jobs:
         run: docker compose --env-file /dev/null config --quiet
 
       - name: Check Dockerfile for backend
-        run: docker build --check .
+        run: docker build --check -f docker/backend/Dockerfile .
 
       - name: Check Dockerfile for frontend
-        run: docker build --check -f frontend/Dockerfile .
+        run: docker build --check -f docker/frontend/Dockerfile .
 
       - name: Select image environment and architecture
         env:
@@ -116,10 +116,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build backend Image
-        run: docker buildx build --platform "$IMAGE_PLATFORM" --load --tag "backend:$IMAGE_TAG" --tag backend:latest .
+        run: docker buildx build --platform "$IMAGE_PLATFORM" --load --tag "backend:$IMAGE_TAG" --tag backend:latest -f docker/backend/Dockerfile .
 
       - name: Build frontend Image
-        run: docker buildx build --platform "$IMAGE_PLATFORM" --load --tag "frontend:$IMAGE_TAG" --tag frontend:latest -f frontend/Dockerfile .
+        run: docker buildx build --platform "$IMAGE_PLATFORM" --load --tag "frontend:$IMAGE_TAG" --tag frontend:latest -f docker/frontend/Dockerfile .
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -144,3 +144,17 @@ jobs:
           docker push "$ECR_IMAGE_PREFIX/frontend:$IMAGE_TAG"
           docker tag frontend:latest "$ECR_IMAGE_PREFIX/frontend:latest"
           docker push "$ECR_IMAGE_PREFIX/frontend:latest"
+
+      - name: Report published deployment images
+        run: |
+          {
+            echo '## Published deployment images'
+            echo
+            echo "Platform: $IMAGE_PLATFORM"
+            echo
+            echo 'Copy these values into the application Terraform tf.vars:'
+            echo '```hcl'
+            printf 'BACKEND_IMAGE = "%s/backend:%s"\n' "$ECR_IMAGE_PREFIX" "$IMAGE_TAG"
+            printf 'FRONTEND_IMAGE = "%s/frontend:%s"\n' "$ECR_IMAGE_PREFIX" "$IMAGE_TAG"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

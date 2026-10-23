@@ -40,7 +40,7 @@ http://localhost:3000
 
 Build the image and start the container:
 ````
-docker build -t random-generator .
+docker build -t random-generator -f docker/backend/Dockerfile .
 docker run --rm -p 3000:3000 random-generator
 ````
 
@@ -100,7 +100,7 @@ compatible with the dashboards on the `monitoring` branch.
 
 ### Metrics dependencies
 
-`@prometheus-io/client` is a direct app dependency used by `utils/metrics.js` to
+`@prometheus-io/client` is a direct app dependency used by `src/utils/metrics.js` to
 create counters, duration histograms, default Node.js/process metrics, and the
 registry served at `/metrics`. Keeping it lets Prometheus collect metrics later
 without changing app code. It does not start a Prometheus or Grafana server.
@@ -158,7 +158,7 @@ platform and load both images locally. It then uses the selected GitHub Environm
 834251003876.dkr.ecr.eu-central-1.amazonaws.com/<environment>/random-generator-repository
 ```
 
-Both environments use AWS account `834251003876` in `eu-central-1`. The modular Terraform ECR module can create the following repositories before
+Both environments use AWS account `834251003876` in `eu-central-1`. The separate Terraform ECR root can create the following repositories before
 publishing to the corresponding combination:
 
 ```text
@@ -172,8 +172,11 @@ preprod/random-generator-repository/arm/backend
 preprod/random-generator-repository/arm/frontend
 ```
 
-Configure the eight individual repository variables in the modular root’s ignored
-`tf.vars`, using `ecr.tfvars.example`. See the [ECR setup and import instructions](terraform/terraform_with_modules/README.md#ecr-repositories).
+Configure the eight repository variables in the ECR root’s ignored `tf.vars`,
+using its `tf.vars.example`. Follow the [ordered Terraform deployment guide](infrastructure/terraform/README.md):
+create ECR locally, publish x64 images through CI, then apply the application
+infrastructure with the build-number-tagged image URIs from the workflow summary.
+See the [ECR setup and import instructions](infrastructure/terraform/ecr/README.md).
 
 Create GitHub Environments named `dev` and `preprod`, each with
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets granting ECR login and
@@ -199,11 +202,11 @@ run pipeline images.
 The same checks can be run locally when the Docker daemon is available:
 
 ````powershell
-hadolint Dockerfile
-hadolint frontend\Dockerfile
+hadolint docker/backend/Dockerfile
+hadolint docker/frontend/Dockerfile
 docker compose config
-docker build --check -t random-generator-api:check .
-docker build --check -t random-generator-web:check -f frontend\Dockerfile .
+docker build --check -t random-generator-api:check -f docker/backend/Dockerfile .
+docker build --check -t random-generator-web:check -f docker/frontend/Dockerfile .
 ````
 
 ## API Endpoints
@@ -297,3 +300,20 @@ The Kubernetes manifests provide the non-sensitive values through `mysql-config`
 - Node.js
 - Express.js
 - JavaScript ES Modules
+
+## Repository layout
+
+- `src/`: backend entry point, database access, and utilities.
+- `public/`: static browser UI.
+- `test/`: Node.js tests.
+- `docker/`: backend, frontend, and Jenkins Dockerfiles; frontend Nginx configuration.
+- `infra-example/`: independent network and ALB Terraform example.
+- `infrastructure/terraform/ecr/`: independent repository bootstrap and local state.
+- `infrastructure/terraform/modular/`: application Terraform configuration and local state.
+- `infrastructure/terraform/examples/standalone/`: standalone Terraform example.
+- `scripts/`: deployment helpers; run `bash scripts/run-ecr-compose.sh` after configuring root-level `development.env` and ECR images in Compose.
+- `docs/`: [Terraform guide](docs/terraform.md), [Jenkins setup](docs/jenkins/setup.md), [Jenkins EC2 guide](docs/jenkins/ec2.md), and [pipeline explanation](docs/jenkins/pipeline-explained.md).
+
+Run npm, Docker builds, and Compose commands from the repository root.
+Terraform examples retain separate local state and variable files; run Terraform
+in the intended example directory or select it with `-chdir`.
