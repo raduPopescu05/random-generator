@@ -1,0 +1,6 @@
+# Override the repository-wide lockfile exclusion for this independent root.
+!.terraform.lock.hcl
+local/
+*.auto.tfvars
+*.auto.tfvars.json
+*.tfvars.json

@@ -1,0 +1,5 @@
+region              = "eu-central-1"
+cluster_name        = "random-generator-poc"
+admin_principal_arn = "arn:aws:iam::834251003876:user/admin"
+db_username         = "random_app"
+# Supply db_password through TF_VAR_db_password in your local shell.
