@@ -60,13 +60,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [dev, preprod]
+        include:
+          - environment: development
+            ecr_environment: dev
+          - environment: preprod
+            ecr_environment: preprod
     environment: ${{ matrix.environment }}
     concurrency:
       group: ecr-publish-${{ matrix.environment }}
       cancel-in-progress: false
     env:
-      TARGET_ENVIRONMENT: ${{ matrix.environment }}
+      TARGET_ENVIRONMENT: ${{ matrix.ecr_environment }}
       IMAGE_TAG: ${{ github.run_number }}
       ECR_REGISTRY: 834251003876.dkr.ecr.eu-central-1.amazonaws.com
     steps:

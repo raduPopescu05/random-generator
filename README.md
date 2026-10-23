@@ -115,7 +115,7 @@ validate Compose, and check/build both application images without publishing.
 
 Pushes to `main` automatically install dependencies, run tests, and validate
 Compose. After successful checks, the `build-and-publish` job waits for approval
-independently for `dev` and `preprod`. Approve either or both environments in the
+independently for `development` and `preprod`. Approve either or both environments in the
 workflow run. Each approved job builds the backend and frontend x64 images
 (`linux/amd64`) and pushes them to ECR on the same runner.
 
@@ -126,12 +126,15 @@ archives or artifact transfers are needed.
 
 ### Configure publication approvals
 
-In **Settings → Environments**, configure `dev` and `preprod` with required
+In **Settings → Environments**, configure `development` and `preprod` with required
 reviewers, a deployment branch rule allowing only `main`, and environment secrets
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Allow self-review if you need to
 approve your own runs. Disable administrator bypass if approvals must always be
 enforced. A short check before AWS authentication blocks publishing if required
 reviewers are missing or the public environment metadata cannot be read.
+
+The GitHub environment `development` supplies approvals and secrets for the
+`dev` ECR path. The `preprod` environment uses the `preprod` ECR path.
 
 Images are published under:
 
