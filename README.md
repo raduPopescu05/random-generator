@@ -113,7 +113,12 @@ Both Dockerfiles use the repository root as their build context.
 requests targeting `main`. Automatic runs install dependencies, run tests,
 validate Compose, and check/build both application images without publishing.
 
-CI completes after validation; it never waits for publication approval.
+CI completes after validation; it never waits for publication approval. Its
+successful summary includes **Publish Dev** and **Publish Preprod** links.
+If you do not want to publish, take no action. The links open the workflows;
+you still select **Run workflow** and `main` to start publication. For a PR,
+merge first: publication builds the `main` commit selected at dispatch, not
+the earlier CI validation images.
 Choose the target **before starting** a separate publication workflow:
 
 | Workflow | GitHub environment | ECR path |

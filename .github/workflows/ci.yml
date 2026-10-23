@@ -51,3 +51,20 @@ jobs:
           docker build --check -f docker/frontend/Dockerfile .
           docker build -t backend:ci -f docker/backend/Dockerfile .
           docker build -t frontend:ci -f docker/frontend/Dockerfile .
+
+      - name: Show publication options
+        env:
+          WORKFLOWS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/workflows
+        run: |
+          {
+            echo '## CI passed. Do you want to publish?'
+            echo
+            echo '- **No:** nothing else to do. This CI run completes successfully.'
+            echo "- [Publish Dev]($WORKFLOWS_URL/publish-dev.yml)"
+            echo "- [Publish Preprod]($WORKFLOWS_URL/publish-preprod.yml)"
+            echo
+            echo 'These links open the workflows; they do not start publication.'
+            echo 'Choose Run workflow, select main, and start the desired workflow.'
+            echo 'Publication checks the main commit selected when you start it, then builds and publishes after environment approval.'
+            echo 'For a pull request, merge it first to publish its changes. The publication workflows must exist on main.'
+          } >> "$GITHUB_STEP_SUMMARY"
