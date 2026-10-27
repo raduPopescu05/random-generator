@@ -45,12 +45,9 @@ cd eks
 cp tf.vars.example tf.vars
 ```
 
-Edit `tf.vars` for your administrator identity and desired names. The example uses the inspected account's `admin` IAM user. Keep the region consistent with the dev ECR images. Supply a database password of 16–41 letters, numbers, underscores or hyphens without putting it in shell history:
+Edit `tf.vars` for your administrator identity and desired names. The example uses the inspected account's `admin` IAM user. Keep the region consistent with the dev ECR images. Uncomment `db_password` in `tf.vars` and replace the example with a private password of 16–41 letters, numbers, underscores or hyphens. `tf.vars` is ignored by Git; keep it private. Terraform also stores the password in local state, so protect the state files and never commit them.
 
 ```bash
-read -r -s -p 'Database password: ' TF_VAR_db_password
-printf '\n'
-export TF_VAR_db_password
 terraform init
 terraform fmt -check -recursive
 terraform validate
@@ -59,7 +56,7 @@ terraform apply poc.tfplan
 rm poc.tfplan
 ```
 
-Keep this shell open for Secret creation. If reopening it, enter the same password again. Do not apply an old saved plan after changing inputs. The RDS instance has no retained backup when destroyed.
+Use the same `tf.vars` file throughout deployment and cleanup. Do not apply an old saved plan after changing inputs. The RDS instance has no retained backup when destroyed.
 
 ## 2. Configure Kubernetes and the load balancer controller
 
@@ -139,22 +136,13 @@ PY
 kubectl apply -f local/manifests/namespace.yaml
 ```
 
-Create the database Secret through stdin, without putting the password in a command argument or file. Do not enable shell tracing or print the Secret:
+Create the database Secret through stdin. Terraform reads both values from `tf.vars`; the password is piped directly into the Kubernetes manifest generator and is not placed in a command argument or printed. Do not enable shell tracing or print the Secret:
 
 ```bash
 set -o pipefail
-python3 - <<'PY' | kubectl apply -f -
-import json, os
-password = os.environ['TF_VAR_db_password']
-assert password, 'Database password must be set'
-print(json.dumps({
-    'apiVersion': 'v1', 'kind': 'Secret',
-    'metadata': {'name': 'database', 'namespace': 'random-generator'},
-    'type': 'Opaque',
-    'stringData': {'DB_USER': os.environ['DB_USER'], 'DB_PASSWORD': password}
-}))
-PY
-unset TF_VAR_db_password
+terraform console -var-file=tf.vars <<'HCL' | python3 -c 'import json,sys; credentials=json.load(sys.stdin); print(json.dumps({"apiVersion":"v1","kind":"Secret","metadata":{"name":"database","namespace":"random-generator"},"type":"Opaque","stringData":{"DB_USER":credentials["user"],"DB_PASSWORD":credentials["password"]}}))' | kubectl apply -f -
+jsonencode({user = var.db_username, password = var.db_password})
+HCL
 kubectl apply --dry-run=server -f local/manifests/
 kubectl apply -f local/manifests/
 kubectl rollout status deployment/api -n random-generator --timeout=10m
@@ -208,13 +196,9 @@ Once the ALB is gone:
 ```bash
 kubectl delete namespace random-generator --wait=true --timeout=10m
 helm uninstall aws-load-balancer-controller -n kube-system --wait --timeout 10m
-read -r -s -p 'Database password: ' TF_VAR_db_password
-printf '\n'
-export TF_VAR_db_password
 terraform plan -destroy -var-file=tf.vars -out=destroy.tfplan
 terraform apply destroy.tfplan
 rm destroy.tfplan
-unset TF_VAR_db_password
 terraform state list
 ```
 

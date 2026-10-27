@@ -15,7 +15,7 @@ variable "db_username" {
   default = "random_app"
 }
 variable "db_password" {
-  description = "POC database administrator password. Also use it for the Kubernetes database Secret. Stored in local Terraform state."
+  description = "POC database administrator password, set in the ignored tf.vars file and used for the Kubernetes database Secret. Stored in local Terraform state."
   type        = string
   sensitive   = true
   validation {
