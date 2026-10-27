@@ -5,7 +5,8 @@ services:
       MYSQL_DATABASE: random_generator
       MYSQL_USER: random_app
       MYSQL_PASSWORD: change-me-app-password
-      MYSQL_ROOT_PASSWORD: change-me-root-password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -14,6 +15,20 @@ services:
       timeout: 5s
       retries: 20
       start_period: 15s
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.21.0
+    command:
+      - --mysqld.address=db:3306
+      - --mysqld.username=root
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    expose:
+      - "9104"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   api:
     build:
@@ -40,13 +55,44 @@ services:
   web:
     build:
       context: .
-      dockerfile: docker/frontend/Dockerfile
+      dockerfile: frontend/Dockerfile
     ports:
-      - "${APP_PORT:-3000}:80"
+      # Host port 3000 maps to Nginx port 80 inside the container.
+      - "3000:80"
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      # Host port 9090 maps to Prometheus port 9090 inside the container.
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      # Host port 3001 maps to Grafana port 3000 inside the container.
+      - "3001:3000"
+    restart: unless-stopped
+
 volumes:
   mysql-data:
+  prometheus-data:
+  grafana-data:

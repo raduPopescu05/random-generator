@@ -24,3 +24,4 @@ scripts/
 test/
 .github/
 Jenkinsfile
+terraform_with_modules/
