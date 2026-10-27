@@ -34,9 +34,9 @@ credentials are needed. Re-run `up -d --build` after changing application code.
 | Grafana | http://localhost:3001 | Sign in as `admin` with the password from `.env` |
 | MySQL exporter | Internal `mysql-exporter:9104` | Exposes MySQL metrics to Prometheus only |
 
-Monitoring ports are bound to `127.0.0.1`. Optional `APP_PORT`, `PROMETHEUS_PORT`,
-and `GRAFANA_PORT` variables change the host ports. They do not change container
-ports or the Grafana data source URL, which remains `http://prometheus:9090`.
+Compose uses fixed port mappings: `3000:80` for the app, `9090:9090` for
+Prometheus, and `3001:3000` for Grafana. Published ports listen on all host
+network interfaces. The Grafana data source URL is `http://prometheus:9090`.
 
 The API's `/metrics` endpoint and the MySQL exporter's `:9104` endpoint are
 available only within the Compose network. Nginx does not proxy either endpoint.
@@ -174,8 +174,9 @@ docker compose logs --tail=100 api prometheus grafana
   time range includes it. Error percentage and latency require actual requests.
 - **No dashboards:** check Grafana logs for provisioning errors and ensure the
   mounted paths exist. All three should appear without manual importing.
-- **Port conflict:** configure the optional host-port variables and restart
-  Compose. Use the corresponding port in your browser and sample requests.
+- **Port conflict:** change the host port (the number before `:`) in
+  `docker-compose.yml` and run `docker compose up -d` to recreate the affected
+  containers. Use the corresponding port in your browser and sample requests.
 - **Database outage:** the API can still expose metrics while database calls fail.
   The ready endpoint and business requests can return 503. Do outage experiments
   only on a disposable Compose project with its own ports and volumes.

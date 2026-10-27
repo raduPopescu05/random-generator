@@ -69,7 +69,7 @@ usage, configuration, troubleshooting, and monitoring-only reset instructions.
 
 The API waits for the MySQL health check before starting, and the web service waits
 for the API health check. Prometheus scrapes the internal API metrics endpoint every
-15 seconds. Monitoring interfaces are bound to the local machine.
+15 seconds. Published ports listen on all host network interfaces.
 
 Stop the stack with:
 ````

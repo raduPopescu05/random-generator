@@ -5,7 +5,8 @@ services:
       MYSQL_DATABASE: random_generator
       MYSQL_USER: random_app
       MYSQL_PASSWORD: change-me-app-password
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -21,7 +22,7 @@ services:
       - --mysqld.address=db:3306
       - --mysqld.username=root
     environment:
-      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     expose:
       - "9104"
     depends_on:
@@ -54,7 +55,8 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
-      - "${APP_PORT:-3000}:80"
+      # Host port 3000 maps to Nginx port 80 inside the container.
+      - "3000:80"
     depends_on:
       api:
         condition: service_healthy
@@ -70,22 +72,22 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     ports:
-      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+      # Host port 9090 maps to Prometheus port 9090 inside the container.
+      - "9090:9090"
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:13.2.1
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+      # Host port 3001 maps to Grafana port 3000 inside the container.
+      - "3001:3000"
     restart: unless-stopped
 
 volumes:
