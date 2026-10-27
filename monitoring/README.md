@@ -1,9 +1,9 @@
 # Local monitoring
 
 The default Compose stack builds the API and frontend locally and starts MySQL,
-Prometheus, and Grafana. Three custom dashboards and the Prometheus data source
-are provisioned automatically. This setup is for local development; AWS deployment
-and notifications are not configured.
+the Prometheus MySQL exporter, Prometheus, and Grafana. Four custom dashboards
+and the Prometheus data source are provisioned automatically. This setup is for
+local development; AWS deployment and notifications are not configured.
 
 ## Start
 
@@ -13,30 +13,35 @@ commands from the repository root in PowerShell:
 ```powershell
 Copy-Item .env.example .env
 notepad .env
-# Replace the example password with a long, unique password, then save.
+# Set unique Grafana and MySQL root passwords, then save.
 docker compose config --quiet
 docker compose up -d --build
 docker compose ps
 ```
 
-Do not overwrite an existing `.env`; add `GRAFANA_ADMIN_PASSWORD` to it instead.
-The file is ignored by Git. Compose rejects an absent or empty password.
-MySQL may need a minute to initialize on its first start. No ECR credentials
-are needed. Re-run `up -d --build` after changing application code.
+Do not overwrite an existing `.env`; add both `GRAFANA_ADMIN_PASSWORD` and
+`MYSQL_ROOT_PASSWORD` to it. The file is ignored by Git. Compose rejects an
+absent or empty password. If `mysql-data` already exists, set
+`MYSQL_ROOT_PASSWORD` to the root password already stored in that database;
+changing the environment variable does not change an initialized MySQL user's
+password. MySQL may need a minute to initialize on its first start. No ECR
+credentials are needed. Re-run `up -d --build` after changing application code.
 
 | Service | Address | Purpose |
 | --- | --- | --- |
 | App | http://localhost:3000 | Generate values and view history |
 | Prometheus | http://localhost:9090 | Query metrics and inspect Targets |
 | Grafana | http://localhost:3001 | Sign in as `admin` with the password from `.env` |
+| MySQL exporter | Internal `mysql-exporter:9104` | Exposes MySQL metrics to Prometheus only |
 
 Monitoring ports are bound to `127.0.0.1`. Optional `APP_PORT`, `PROMETHEUS_PORT`,
 and `GRAFANA_PORT` variables change the host ports. They do not change container
 ports or the Grafana data source URL, which remains `http://prometheus:9090`.
 
-The API's `/metrics` endpoint is available only within the Compose network.
-Nginx does not proxy it. Running `npm start` directly instead of Compose exposes
-all API routes on its listening port, so restrict network access accordingly.
+The API's `/metrics` endpoint and the MySQL exporter's `:9104` endpoint are
+available only within the Compose network. Nginx does not proxy either endpoint.
+Running `npm start` directly instead of Compose exposes all API routes on its
+listening port, so restrict network access accordingly.
 
 ## Dashboards
 
@@ -47,6 +52,7 @@ In Grafana, open **Dashboards → Random Generator**:
 | API Overview | Scrape availability, request rate, 5xx percentage, p50/p95 latency, routes and status codes |
 | Node.js Runtime | Process uptime, CPU, resident memory, heap, event-loop delay and GC duration |
 | Generation & Database Activity | Persisted generations by type and API-observed database call rates, failures and p95 latency |
+| MySQL Overview | Exporter availability, current and peak connections, query and slow-query rates, InnoDB buffer-pool hit ratio and dirty pages |
 
 Every dashboard refreshes every 15 seconds and initially shows the last hour.
 Wait for at least two scrapes (roughly 30–60 seconds) before interpreting rates.
@@ -74,7 +80,20 @@ back to source control. Data source and provider YAML are under
 
 ## Generate traffic
 
-Use the app in a browser or run this one-minute sample:
+On macOS, run the script from the repository root:
+
+```sh
+./generate-traffic.sh
+# Custom app address and number of rounds:
+./generate-traffic.sh http://localhost:8080 30
+```
+
+The script checks database access through `/history`, prints each request's HTTP
+status, and stops on errors. It defaults to 30 rounds, with four requests per
+round and a two-second pause between rounds. It works with `sh` or Bash and
+can be launched from the default macOS zsh terminal.
+
+On PowerShell, use this one-minute sample:
 
 ```powershell
 1..30 | ForEach-Object {
@@ -95,9 +114,10 @@ are never metric labels.
 
 ## Inspect and query
 
-Open Prometheus **Status → Targets** and confirm both jobs are UP:
-`prometheus` and `random-generator-api`. The API target is `api:3000/metrics`.
-It may remain DOWN during initial database initialization, before the API listens.
+Open Prometheus **Status → Targets** and confirm all three jobs are UP:
+`prometheus`, `random-generator-api`, and `mysql`. The API target is
+`api:3000/metrics`; the MySQL target is `mysql-exporter:9104/metrics`. The API
+and exporter may remain DOWN during initial database initialization.
 
 Try these in Prometheus's query UI or Grafana Explore:
 
@@ -123,7 +143,7 @@ The dashboards filter operational measurements against current scrape availabili
 The simple example queries above are useful for investigation and may retain older
 samples briefly after a target goes down.
 
-Inspect raw metrics and validate configuration:
+Inspect raw API and MySQL metrics and validate configuration:
 
 ```powershell
 docker compose exec api node -e "fetch('http://localhost:3000/metrics').then(r => r.text()).then(console.log)"
@@ -141,8 +161,13 @@ docker compose logs --tail=100 api prometheus grafana
   password and change it in Grafana, then update `.env`. If locked out, use
   `docker compose exec grafana grafana cli admin reset-admin-password '<new-password>'`.
   That recovery command includes the password in shell history.
-- **Prometheus target DOWN:** check API logs, database health, and target error text.
-  The target must use `api:3000`, not `localhost:3000`.
+- **Prometheus target DOWN:** check API/exporter logs, database health, and target
+  error text. Targets must use Compose service names (`api:3000` and
+  `mysql-exporter:9104`), not `localhost`.
+- **MySQL exporter cannot connect:** confirm `MYSQL_ROOT_PASSWORD` in `.env`
+  matches the root password in the initialized `mysql-data` volume, then inspect
+  `docker compose logs mysql-exporter db`. Query `mysql_up` in Prometheus to
+  confirm MySQL collection is succeeding.
 - **Grafana data source unavailable:** its internal URL must be
   `http://prometheus:9090`. Check that Prometheus is running.
 - **Empty panels:** wait for several scrapes, generate traffic, and confirm the
@@ -196,7 +221,9 @@ Prometheus scrapes every 15 seconds. Change its configuration in
 Retention is set by its Compose command. Image versions are pinned in Compose.
 The Node instrumentation uses `@prometheus-io/client`, the maintained successor
 to `prom-client`, and requires Node 22 or 24 (or a supported newer release).
-No Alertmanager, external notifications, host exporter, or MySQL exporter is installed.
+No Alertmanager, external notifications, or host exporter is installed. The MySQL
+exporter uses root credentials for this local development setup; do not reuse
+these credentials for a production deployment.
 
 See [the concepts guide](../docs/monitoring-observability.md),
 [the official Node client](https://github.com/prometheus/client_js),
