@@ -55,7 +55,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: frontend/Dockerfile
+      dockerfile: docker/frontend/Dockerfile
     ports:
       # Host port 3000 maps to Nginx port 80 inside the container.
       - "3000:80"
