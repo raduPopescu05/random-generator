@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: local-app
+    folder: Local Application
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards

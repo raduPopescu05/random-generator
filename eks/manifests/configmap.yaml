@@ -4,6 +4,6 @@ metadata:
   name: database
   namespace: random-generator
 data:
-  DB_HOST: REPLACE_WITH_RDS_HOST
+  DB_HOST: random-generator-poc.ct8sa8ygmrjl.eu-central-1.rds.amazonaws.com
   DB_PORT: "3306"
   DB_NAME: random_generator

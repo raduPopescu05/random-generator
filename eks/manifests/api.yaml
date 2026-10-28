@@ -28,7 +28,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: api
-          image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/backend:REPLACE_WITH_BUILD_NUMBER
+          image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/backend:latest
           ports:
             - name: http
               containerPort: 3000
