@@ -31,7 +31,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: mysql
-          image: mysql:8.4
+          image: mysql-image
           imagePullPolicy: IfNotPresent
           ports:
             - name: mysql
@@ -72,6 +72,33 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
+        - name: mysql-exporter
+          image: mysql-exporter-image
+          imagePullPolicy: IfNotPresent
+          args:
+            - --mysqld.address=127.0.0.1:3306
+            - --mysqld.username=root
+          env:
+            - name: MYSQLD_EXPORTER_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: database, key: MYSQL_ROOT_PASSWORD}
+          ports:
+            - name: metrics
+              containerPort: 9104
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          # The landing page checks the exporter HTTP server without querying MySQL.
+          # Prometheus mysql_up reports whether database collection succeeds.
+          readinessProbe:
+            httpGet: {path: /, port: metrics}
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /, port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -80,3 +107,17 @@ spec:
         resources:
           requests:
             storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-exporter
+  namespace: random-generator
+spec:
+  type: ClusterIP
+  selector:
+    app: db
+  ports:
+    - name: metrics
+      port: 9104
+      targetPort: metrics

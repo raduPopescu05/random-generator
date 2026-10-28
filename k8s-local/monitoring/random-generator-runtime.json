@@ -1,0 +1,487 @@
+{
+  "uid": "random-generator-runtime",
+  "title": "Node.js Runtime",
+  "tags": [
+    "random-generator",
+    "provisioned"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "API scrape availability",
+      "type": "stat",
+      "description": "UP means Prometheus can scrape the API; it does not establish database readiness. Unknown means no scrape result.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "random-generator-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(up{job=\"random-generator-api\"})",
+          "legendFormat": "API",
+          "range": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "random-generator-prometheus"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "Unknown",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {},
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Process uptime",
+      "type": "stat",
+      "description": "Resets when the API process restarts.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "random-generator-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(time() - process_start_time_seconds{job=\"random-generator-api\"}) and on() (max(up{job=\"random-generator-api\"}) == 1)",
+          "legendFormat": "Uptime",
+          "range": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "random-generator-prometheus"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "CPU usage",
+      "type": "timeseries",
+      "description": "100% represents one CPU core, not total host capacity.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "random-generator-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(100 * rate(process_cpu_seconds_total{job=\"random-generator-api\"}[$__rate_interval])) and on() (max(up{job=\"random-generator-api\"}) == 1)",
+          "legendFormat": "CPU",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "random-generator-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "No data",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Resident memory",
+      "type": "timeseries",
+      "description": "Memory resident for the API process, not the complete Docker host.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "random-generator-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(process_resident_memory_bytes{job=\"random-generator-api\"}) and on() (max(up{job=\"random-generator-api\"}) == 1)",
+          "legendFormat": "RSS",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "random-generator-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "No data",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "JavaScript heap",
+      "type": "timeseries",
+      "description": "Used and allocated V8 heap memory.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "random-generator-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(nodejs_heap_size_used_bytes{job=\"random-generator-api\"}) and on() (max(up{job=\"random-generator-api\"}) == 1)",
+          "legendFormat": "Used",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "random-generator-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "(nodejs_heap_size_total_bytes{job=\"random-generator-api\"}) and on() (max(up{job=\"random-generator-api\"}) == 1)",
+          "legendFormat": "Allocated",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "random-generator-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "No data",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Event loop delay",
+      "type": "timeseries",
+      "description": "p99 delay reported by the Node runtime between collections.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "random-generator-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(nodejs_eventloop_lag_p99_seconds{job=\"random-generator-api\"}) and on() (max(up{job=\"random-generator-api\"}) == 1)",
+          "legendFormat": "p99",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "random-generator-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Garbage collection duration",
+      "type": "timeseries",
+      "description": "Mean duration per GC kind; no data when no collections occurred.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "random-generator-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (kind) (rate(nodejs_gc_duration_seconds_sum{job=\"random-generator-api\"}[$__rate_interval])) / (sum by (kind) (rate(nodejs_gc_duration_seconds_count{job=\"random-generator-api\"}[$__rate_interval])) > 0)) and on() (max(up{job=\"random-generator-api\"}) == 1)",
+          "legendFormat": "{{kind}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "random-generator-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

@@ -31,7 +31,7 @@ spec:
         - name: ecr-registry
       containers:
         - name: frontend
-          image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/frontend:latest
+          image: frontend-image
           imagePullPolicy: Always
           ports:
             - name: http

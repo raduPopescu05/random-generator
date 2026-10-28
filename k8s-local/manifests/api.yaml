@@ -16,7 +16,7 @@ metadata:
   name: api
   namespace: random-generator
 spec:
-  replicas: 1
+  # Replica count is managed by the API HorizontalPodAutoscaler.
   selector:
     matchLabels:
       app: api
@@ -30,7 +30,7 @@ spec:
         - name: ecr-registry
       containers:
         - name: api
-          image: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/backend:latest
+          image: backend-image
           imagePullPolicy: Always
           ports:
             - name: http

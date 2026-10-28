@@ -8,3 +8,6 @@ scrape_configs:
   - job_name: random-generator-api
     static_configs:
       - targets: ["api:3000"]
+  - job_name: mysql
+    static_configs:
+      - targets: ["mysql-exporter:9104"]
