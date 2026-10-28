@@ -29,7 +29,6 @@ resource "aws_db_instance" "app" {
   db_name                     = "random_generator"
   username                    = var.db_username
   password                    = var.db_password
-  manage_master_user_password = false
   db_subnet_group_name        = aws_db_subnet_group.app.name
   vpc_security_group_ids      = [aws_security_group.database.id]
   publicly_accessible         = false
