@@ -106,8 +106,8 @@ spec:
             - name: GF_ANALYTICS_CHECK_FOR_UPDATES
               value: "false"
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
-            limits: {cpu: 500m, memory: 384Mi}
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 1Gi}
           startupProbe:
             httpGet: {path: /api/health, port: http}
             periodSeconds: 5
