@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database
+  namespace: random-generator
+data:
+  DB_HOST: REPLACE_WITH_RDS_HOST
+  DB_PORT: "3306"
+  DB_NAME: random_generator
