@@ -1,81 +1,51 @@
-# Kubernetes Networking and Configuration: Ingress and Kustomize
+# Local blue/green architecture
 
-This guide explains the two Kubernetes concepts used by the local deployment in this directory: **Ingress** for routing incoming web traffic, and **Kustomize** for assembling and customizing Kubernetes resource manifests. The examples refer to the `random-generator` namespace and files in `k8s-local/`.
+## Routing
 
-## Ingress: routing web requests into the cluster
+`app.localhost → Traefik → frontend Service → active frontend → matching API → shared MySQL`
 
-An **Ingress** is a Kubernetes API resource that describes how HTTP or HTTPS requests should be routed to Services inside a cluster. It commonly matches a request by hostname and URL path. The Ingress resource is a set of routing rules; it is not itself a web server, load balancer, or proxy that accepts connections.
+The public Service selects `app: frontend-blue|frontend-green`, `component:
+frontend`, and `color: blue|green`. Each color also has its own frontend Service
+for port-forward previews. Nginx configuration directs blue to `api-blue:3000`
+and green to `api-green:3000`. Distinct app labels prevent legacy selectors from
+matching new pods during migration.
 
-An **Ingress controller** watches Ingress resources and implements their rules. This local deployment uses **Traefik** as its controller. Traefik receives browser traffic on HTTP port 80, looks at the request host, finds the matching Ingress rule, and forwards the request to the specified Service. The Service then sends it to a ready Pod selected by its labels.
+## Configuration ownership
 
-The route can be viewed as:
+The root Kustomization owns shared namespace, database settings, database,
+monitoring, and Ingress. It owns neither the public frontend Service nor the
+color workloads, so routine shared applies cannot reset routing or images.
 
-```text
-Browser → Traefik (Ingress controller) → Ingress rule → Service → Pod
-```
+Each release directory owns two Deployments, two internal Services, an API HPA,
+and a generated Nginx/release ConfigMap. Digest references in that directory
+select application images. The ConfigMap hash is injected into the frontend
+volume reference; changing its content triggers a rollout.
 
-### Routes in this deployment
+The public frontend Service is created once during bootstrap and subsequently
+changed with manual JSON patches. Each promotion patch tests the expected old
+color before replacing the entire selector. The Service is the source of truth
+for the active color. The operator records the previous release before switching.
 
-The rules are defined in [`manifests/ingress.yaml`](manifests/ingress.yaml). The resource is named `random-generator`, is in the `random-generator` namespace, and selects the `traefik` Ingress class. Its two hostname rules are:
+`release.json` is served without caching and records color, release ID, and both
+images. It is a manually maintained record: verify it against the actual
+Deployment images as described in the runbook.
 
-| Browser request | Ingress backend | What serves the request |
-| --- | --- | --- |
-| `http://app.localhost/` | Service `frontend`, port 80 | The frontend Pod serves the web UI. Its application API requests are handled through the frontend/API setup. |
-| `http://grafana.localhost/` | Service `grafana`, port 3000 | The Grafana Pod serves the monitoring UI. |
+## Scaling, monitoring, and persistence
 
-Both rules use the `/` path with `pathType: Prefix`, so they match the root path and paths below it for their respective hostname. The hostname is what distinguishes the two sites when both use the same HTTP port. The Services are internal `ClusterIP` Services; Traefik provides the external entry point.
+Both APIs have independent HPAs using metrics-server, a 70% CPU request target,
+and 1–5 replicas. Prometheus independently scrapes both API Services, adding a
+release_color label. Service-level scraping does not observe all API pods
+individually. Existing dashboards may aggregate both releases.
 
-Creating an Ingress resource alone does not make it work: a compatible controller must be installed and running, and it must handle the resource's Ingress class. For this setup, Rancher Desktop must have Kubernetes and Traefik enabled. The `traefik.ingress.kubernetes.io/router.entrypoints: web` annotation selects Traefik's `web` entry point for these routes.
+Both releases use the same database and Secrets. Rollback changes routing and
+preserves new records; it cannot undo incompatible schema changes. No automatic
+migration or database restore is performed.
 
-If a hostname does not resolve to the local cluster's reachable address, the browser cannot reach Traefik even if the Ingress rules are correct. The local README describes checking Traefik, port 80, and hostname resolution for Mac and Windows/WSL.
+## Operational limits
 
-## Kustomize: assembling Kubernetes manifests
+Commands are intentionally manual. A failed check does not prevent an operator
+from running a later promotion command; stop on errors. Rollout readiness and
+end-to-end preview checks are both required. Keep the previous release running
+for manual rollback. Existing connections may briefly remain on the old color.
 
-**Kustomize** is a configuration management tool for Kubernetes resources. It takes YAML manifests as input, combines and transforms them, and produces a final set of Kubernetes objects. The input files remain ordinary Kubernetes YAML; Kustomize applies changes at deploy time without requiring template expressions inside those files.
-
-Kustomize is included with `kubectl`, so this repository uses commands such as:
-
-```bash
-# Inspect the rendered resources without applying them
-kubectl kustomize k8s-local/
-
-# Build and apply the Kustomize configuration
-kubectl apply -k k8s-local/
-```
-
-The `-k` option tells `kubectl` to treat the path as a Kustomize directory. This is different from `kubectl apply -f`, which applies files directly and does not perform this directory's image substitutions or generated ConfigMaps.
-
-### The Kustomization file
-
-[`kustomization.yaml`](kustomization.yaml) is the configuration entry point. It tells Kustomize which resources to include and which transformations or generators to apply. In this directory it:
-
-- Includes the namespace, application configuration, Secret, database, API, HPA, frontend, monitoring, and Ingress manifests.
-- Sets `namespace: random-generator` for namespaced resources.
-- Replaces placeholder image names such as `backend-image` and `frontend-image` with concrete image repositories and tags. It also selects images for MySQL, its exporter, Prometheus, and Grafana.
-- Generates ConfigMaps from monitoring configuration and dashboard files under `k8s-local/monitoring/`.
-
-### Image substitutions
-
-Workload manifests use readable placeholder image references, for example `image: backend-image` in `manifests/api.yaml`. The `images` section in `kustomization.yaml` maps that name to a real image repository and tag. Kustomize rewrites the image in the rendered output before `kubectl` sends the Deployment to Kubernetes.
-
-To change which image is deployed, edit the corresponding `newName` or `newTag` in `kustomization.yaml`, then render or apply the directory with Kustomize. Applying the workload YAML directly with `-f` would bypass these substitutions, leaving the placeholder image unresolved.
-
-### Generated ConfigMaps
-
-The `configMapGenerator` section builds ConfigMaps from files such as `monitoring/prometheus.yml`, Grafana datasource and provider settings, and dashboard JSON. This keeps those settings in normal files while making them available to Pods as Kubernetes ConfigMaps.
-
-By default, generated ConfigMap names include a hash of their contents. Kustomize updates references to those generated ConfigMaps in the rendered workloads. When a source file changes and the configuration is applied again, the changed name prompts Kubernetes to update the workloads that consume it. This behavior is used for the Prometheus and Grafana configuration in this deployment.
-
-### Composition and overlays
-
-Kustomize's `resources` list composes several resource files into one deployable configuration. For larger setups, a common pattern is to keep shared resources in a base and create overlays for environments such as development, staging, and production. An overlay references the base and applies environment-specific image, replica, namespace, or configuration changes.
-
-This repository's `k8s-local/` directory is a directly applicable Kustomize configuration rather than a base-and-overlay hierarchy. The concepts still apply: the Kustomization file gathers resources and makes consistent changes across them before application.
-
-Kustomize prepares the desired resource definitions; it does not wait for Pods to become ready or guarantee that dependencies start in order. After applying, use Kubernetes rollout and pod status commands to check that workloads are healthy. See [`README.md`](README.md) for the full local deployment procedure.
-
-## How the pieces work together
-
-For this deployment, Kustomize assembles the Kubernetes resources and applies the configured images, namespace, and generated monitoring ConfigMaps. Kubernetes then creates the Services, Deployments, database, monitoring components, and Ingress resource in the cluster. Traefik watches the Ingress resource and routes browser requests for `app.localhost` and `grafana.localhost` to their respective internal Services.
-
-In short, Kustomize prepares and applies the cluster configuration; Ingress describes web routing; Traefik implements those routes. To make a change, edit the relevant manifest or source configuration, render it with `kubectl kustomize k8s-local/` if you want to inspect the result, and apply it with `kubectl apply -k k8s-local/`.
+Follow [DEPLOYMENT.md](DEPLOYMENT.md) for exact commands and failure demonstrations.
