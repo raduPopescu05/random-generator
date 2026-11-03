@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: random-generator
+
+resources:
+  - manifests/namespace.yaml
+  - manifests/configmap.yaml
+  - manifests/secrets.yaml
+  - manifests/database.yaml
+  - manifests/api.yaml
+  - manifests/hpa.yaml
+  - manifests/frontend.yaml
+  - manifests/monitoring.yaml
+  - manifests/ingress.yaml
+
+# Edit image repositories and tags here, then apply with kubectl apply -k k8s-local/.
+images:
+  - name: backend-image
+    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/backend
+    newTag: latest
+  - name: frontend-image
+    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/frontend
+    newTag: latest
+  - name: mysql-image
+    newName: mysql
+    newTag: "8.4"
+  - name: mysql-exporter-image
+    newName: prom/mysqld-exporter
+    newTag: v0.21.0
+  - name: prometheus-image
+    newName: prom/prometheus
+    newTag: v3.15.0
+  - name: grafana-image
+    newName: grafana/grafana
+    newTag: "13.2.1"
+
+# Generated names include a content hash. Kustomize updates the workload references
+# automatically, so editing these files triggers a monitoring rollout on apply.
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml=monitoring/prometheus.yml
+  - name: grafana-datasource
+    files:
+      - datasource.yml=monitoring/datasource.yml
+  - name: grafana-provider
+    files:
+      - provider.yml=monitoring/provider.yml
+  - name: grafana-dashboards
+    files:
+      - overview.json=monitoring/overview.json
+      - mysql-overview.json=monitoring/mysql-overview.json
+      - random-generator-activity.json=monitoring/random-generator-activity.json
+      - random-generator-api.json=monitoring/random-generator-api.json
+      - random-generator-runtime.json=monitoring/random-generator-runtime.json

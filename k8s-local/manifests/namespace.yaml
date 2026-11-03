@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: random-generator
+  labels:
+    app.kubernetes.io/managed-by: random-generator-local

@@ -1,0 +1,6 @@
+region              = "eu-central-1"
+cluster_name        = "random-generator-poc"
+admin_principal_arn = "arn:aws:iam::834251003876:user/admin"
+db_username         = "random_app"
+# In your ignored local tf.vars, uncomment this and replace the value.
+# db_password         = "replace-with-a-private-16-to-41-character-password"
