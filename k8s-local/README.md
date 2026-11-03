@@ -84,7 +84,7 @@ Kustomize is built into `kubectl`; no extra installation is needed. It reads `k8
 
 Kustomize prepares resources before deployment. ConfigMaps supply settings inside the cluster; Secrets supply credentials. A ConfigMap cannot set a Deployment image.
 
-The single application Secret is named `database`. Grafana login is **admin / local-grafana-password**. If MySQL already has data, keep its existing credentials: applying a Secret does not change passwords inside the database. ECR authentication stays separate in step 4.
+The single application Secret is named `database`. Grafana login is **admin / admin**. If MySQL already has data, keep its existing credentials: applying a Secret does not change passwords inside the database. ECR authentication stays separate in step 4.
 
 Deploy the namespace, MySQL with its exporter sidecar, API, frontend, Prometheus, Grafana, Ingress, application Secret, and all configuration together. Adding the sidecar replaces the existing MySQL pod once and briefly interrupts database access; its PVC and history are preserved. Record existing history before applying if you want to verify the upgrade.
 
@@ -148,7 +148,7 @@ kubectl -n kube-system get service traefik
 kubectl get ingress random-generator
 ```
 
-Open [the app](http://app.localhost) and [Grafana](http://grafana.localhost). Grafana login is **admin / local-grafana-password**. Under **Dashboards → Random Generator**, you will find:
+Open [the app](http://app.localhost) and [Grafana](http://grafana.localhost). Grafana login is **admin / admin**. Under **Dashboards → Random Generator**, you will find:
 
 - API Overview
 - Node.js Runtime
