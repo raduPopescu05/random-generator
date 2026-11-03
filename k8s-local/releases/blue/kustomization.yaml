@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: random-generator
+resources:
+  - resources.json
+images:
+  - name: backend-image
+    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/backend
+    digest: sha256:SET_BACKEND_DIGEST
+  - name: frontend-image
+    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/frontend
+    digest: sha256:SET_FRONTEND_DIGEST
+configMapGenerator:
+  - name: frontend-config-blue
+    files:
+      - default.conf=nginx.conf
+      - release.json

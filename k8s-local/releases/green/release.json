@@ -1,0 +1,6 @@
+{
+  "color": "green",
+  "release": "SET_RELEASE_ID",
+  "frontend": "SET_FRONTEND_DIGEST",
+  "backend": "SET_BACKEND_DIGEST"
+}

@@ -8,20 +8,11 @@ resources:
   - manifests/configmap.yaml
   - manifests/secrets.yaml
   - manifests/database.yaml
-  - manifests/api.yaml
-  - manifests/hpa.yaml
-  - manifests/frontend.yaml
   - manifests/monitoring.yaml
   - manifests/ingress.yaml
 
-# Edit image repositories and tags here, then apply with kubectl apply -k k8s-local/.
+# Shared services only. Apply blue/green release directories separately; see DEPLOYMENT.md.
 images:
-  - name: backend-image
-    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/backend
-    newTag: latest
-  - name: frontend-image
-    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/frontend
-    newTag: latest
   - name: mysql-image
     newName: mysql
     newTag: "8.4"

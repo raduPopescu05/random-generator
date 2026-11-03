@@ -7,7 +7,10 @@ scrape_configs:
       - targets: ["prometheus:9090"]
   - job_name: random-generator-api
     static_configs:
-      - targets: ["api:3000"]
+      - targets: ["api-blue:3000"]
+        labels: {release_color: blue}
+      - targets: ["api-green:3000"]
+        labels: {release_color: green}
   - job_name: mysql
     static_configs:
       - targets: ["mysql-exporter:9104"]
