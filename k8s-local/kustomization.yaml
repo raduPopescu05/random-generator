@@ -17,10 +17,10 @@ resources:
 # Edit image repositories and tags here, then apply with kubectl apply -k k8s-local/.
 images:
   - name: backend-image
-    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/backend
+    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/backend
     newTag: latest
   - name: frontend-image
-    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/frontend
+    newName: 834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/frontend
     newTag: latest
   - name: mysql-image
     newName: mysql

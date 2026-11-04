@@ -1,6 +1,6 @@
-# Deploy ECR images to Rancher Desktop Kubernetes
+# Deploy ECR images to local Kubernetes
 
-**Run every repository-relative command from the repository root (`random-generator/`), not from `k8s-local/`, `docker/backend/`, or `docker/frontend/`.**
+**Run repository-relative commands from the repository root (`random-generator/`).** Windows commands use **PowerShell** (Windows PowerShell 5.1 or PowerShell 7). macOS-specific commands use **Bash**. Shared single-line `kubectl` commands work in both shells; on macOS replace `curl.exe` with `curl`. The optional existing load-test script is Bash-only and is documented separately.
 
 On this Mac:
 
@@ -8,57 +8,126 @@ On this Mac:
 cd "/Users/bigradu/Desktop/MacBook-Pro/Codex-Projects /random-generator"
 ```
 
-On another machine, use its repository location:
+On this Windows machine, in PowerShell:
 
-```bash
-cd /path/to/random-generator
+```powershell
+Set-Location "F:\Programare-2025\CodexStuff\random-generator"
 ```
 
-The commands below use **Bash**. If your terminal uses another shell, run `bash` first, then change to the repository root. On Windows, run them in WSL Ubuntu with Rancher Desktop's WSL integration enabled.
-
-This is a manual deployment into Rancher Desktop's built-in Kubernetes. There is no deployment script or local image build. The application Deployments use these exact ECR images:
+This is a manual deployment using published ECR images, with no local image build. The current `kustomization.yaml` selects:
 
 ```text
-834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/backend:latest
-834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/arm/frontend:latest
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/backend:latest
+834251003876.dkr.ecr.eu-central-1.amazonaws.com/dev/random-generator-repository/x64/frontend:latest
 ```
 
-Both Deployments use `imagePullPolicy: Always` and the `ecr-registry` image pull Secret. The frontend repository path is based on the supplied repository name; both originally supplied console links pointed to the backend page. Confirm that the frontend repository and its `latest` tag exist before deployment.
+Both Deployments use `imagePullPolicy: Always` and the `ecr-registry` pull Secret. Confirm both repositories and tags exist. For an ARM64 Mac node, change **both** application `newName` values in `k8s-local/kustomization.yaml` from `/x64/` to `/arm/` and verify those tags support ARM64. Repository names alone do not prove image architecture. Do not rely on emulation in Kubernetes.
 
-## 1. Create the cluster through Rancher Desktop
+## 1. Choose the platform setup
 
-Open Rancher Desktop, select **dockerd (Moby)** as the container engine, enable **Kubernetes** and **Traefik**, and wait for startup to finish. Rancher Desktop creates and manages the cluster. Approximately 4 CPUs and 6 GB of available memory is a reasonable starting allocation for this application and monitoring.
+### macOS: Rancher Desktop
 
-Required command-line tools: `kubectl`, AWS CLI v2, Bash, and curl. Configure your AWS CLI credentials before continuing. The AWS identity needs ECR authentication and image-pull access to the two repositories above. First startup needs internet access to download the images.
+Select **dockerd (Moby)**, enable **Kubernetes** and bundled **Traefik**, and wait for startup. Allow privileged-port access if prompted. Use the bundled controller in `kube-system`; do not install the Docker Desktop Helm release on Rancher.
 
-## 2. Select and inspect the cluster
+Required tools: kubectl, AWS CLI v2, Bash, and curl. Start with approximately 4 CPUs and 6 GB available memory for the application and monitoring; HPA load may need more.
 
-Do this once before following the deployment steps: clear the previous kubeconfig override and switch back to Rancher Desktop. All subsequent commands use this selected context, so you do not need to repeat it on each command.
+### Windows 11: Docker Desktop + PowerShell
 
-```bash
-unset KUBECONFIG
-kubectl config use-context rancher-desktop
+1. Use Linux containers and Docker Desktop's WSL 2 engine, following [Docker's backend setup](https://docs.docker.com/desktop/features/wsl/). WSL 2 is the container backend; run all deployment commands in Windows PowerShell. A WSL terminal, Linux CLI installation, and distribution integration are not required for these commands. Avoid running Rancher Desktop concurrently against the same host ports.
+2. Reuse the existing cluster in Docker Desktop's Kubernetes view. **Do not reset it or switch its provisioner.** For a fresh installation, create a single-node kubeadm cluster. Existing Docker Desktop kind clusters are also supported by this workflow. See [Docker's Kubernetes setup](https://docs.docker.com/desktop/use-desktop/kubernetes/).
+3. Install Windows versions of kubectl (included with Docker Desktop), Helm, AWS CLI v2, and curl, and make them available on PATH. Open a new PowerShell terminal after installation. Keep kubectl within one minor version of the server. Use `curl.exe` explicitly to avoid Windows PowerShell's `curl` alias for `Invoke-WebRequest`.
+
+   Install Helm using [Chocolatey](https://docs.chocolatey.org/en-us/choco/setup/). If Chocolatey is not installed, follow its setup instructions first. Open **PowerShell as Administrator** and run the [Helm Chocolatey installation command](https://docs.helm.sh/):
+
+   ```powershell
+   choco --version
+   choco install kubernetes-helm -y
+   ```
+
+   Close the administrator terminal and open a new regular PowerShell terminal so PATH changes are loaded. Verify Helm before continuing:
+
+   ```powershell
+   helm version --shortex
+   ```
+
+   The Chocolatey package installs the Helm CLI; the `--version 42.3.0` used later pins the Traefik chart, not the Helm CLI.
+
+4. Configure AWS credentials in Windows and check `aws sts get-caller-identity`. The identity needs ECR authentication and pull access. Internet access is needed for charts and images.
+5. Check the Windows tools and cluster connectivity:
+
+```powershell
+Get-Command docker, kubectl, helm, aws, curl.exe
+kubectl --request-timeout=10s get nodes
+```
+
+If the API is unreachable, verify Docker Desktop's Kubernetes startup and resolution of the configured API hostname. Resolve connectivity before proceeding; do not disable TLS verification or substitute a container IP blindly.
+
+## 2. Inspect the cluster and prepare ingress
+
+Run this in PowerShell on Windows, or Bash on macOS:
+
+```powershell
 kubectl get nodes -o wide
 kubectl get nodes -L kubernetes.io/arch
 kubectl get storageclass
 ```
 
-Expected: the Rancher node is `Ready`, its architecture is listed, and a default StorageClass is available for MySQL. Rancher Desktop normally supplies `local-path`. This workflow uses your normal Kubernetes configuration; it does not use a kubeconfig in this repository.
+Require Ready nodes, matching image architecture, and a **default** StorageClass for MySQL. Rancher normally supplies `local-path`; Docker Desktop's provisioner/name can vary. The PVC intentionally does not specify a class. A `WaitForFirstConsumer` volume may remain Pending until its pod is scheduled. If no default exists, resolve cluster storage provisioning before deploying; do not hard-code a Rancher class into the application.
+
+### Rancher: verify the bundled controller
+
+```bash
+kubectl -n kube-system rollout status deployment/traefik --timeout=300s
+kubectl get ingressclass traefik
+kubectl -n kube-system get service traefik
+```
+
+### Docker Desktop: install Traefik with Helm
+
+The [official Traefik chart](https://github.com/traefik/traefik-helm-chart/tree/v42.3.0/traefik) is pinned to **42.3.0** (Traefik **v3.7.17**, Kubernetes **1.30+**). Check `kubectl version` first. An older cluster needs a compatible chart version evaluated separately; do not reset the cluster to follow this guide.
+
+`traefik-values.yaml` installs one replica, the Kubernetes Ingress provider and explicit `traefik` IngressClass. Its LoadBalancer Service publishes only HTTP port 8080; the dashboard is disabled and no HTTPS redirect is configured. Controller installation is separate from application Kustomize.
+
+Before installation, check `kubectl get ingressclass` and `helm list -A`. If another release owns `traefik`, reconcile that existing installation rather than attempting a second controller.
+
+```powershell
+helm repo add traefik https://traefik.github.io/charts
+helm repo update traefik
+helm template traefik traefik/traefik --version 42.3.0 --namespace traefik --kube-version 1.36.1 -f k8s-local/traefik-values.yaml
+helm upgrade --install traefik traefik/traefik --version 42.3.0 --namespace traefik --create-namespace -f k8s-local/traefik-values.yaml --wait --timeout 300s
+kubectl -n traefik rollout status deployment/traefik --timeout=300s
+kubectl get ingressclass traefik
+kubectl -n traefik get service traefik
+```
+
+For rendering, replace `1.36.1` with your server version if different. Repeating `helm upgrade --install` updates the same release. Expect a LoadBalancer Service with port 8080 and a host-reachable endpoint (normally localhost); verify actual Windows reachability in step 7. A healthy controller alone does not prove host forwarding works. No MetalLB or separate kind cluster is needed.
+
+Continue with the shared steps below for your installed desktop platform. Application commands specify the `random-generator` namespace explicitly.
 
 ## 3. Create the namespace
 
-```bash
+```powershell
 kubectl apply -f k8s-local/manifests/namespace.yaml
-kubectl config set-context --current --namespace=random-generator
 kubectl get namespaces
-kubectl get pods
+kubectl -n random-generator get pods
 ```
 
-Expected: `random-generator` is Active. An empty pod list is normal at this stage. Ordinary `kubectl` commands now use Rancher Desktop and this namespace. In another terminal, select that same context and namespace before using ordinary commands.
+Expected: `random-generator` is Active. An empty pod list in that namespace is normal at this stage.
 
 ## 4. Create the ECR image pull Secret
 
-With your AWS CLI authenticated, run this after creating the namespace:
+On either platform, configure AWS CLI credentials in the same terminal environment and verify `aws sts get-caller-identity`. The identity needs ECR authentication and pull access. Run this after creating the namespace:
+
+**Windows PowerShell:**
+
+```powershell
+$ecrPassword = aws ecr get-login-password --region eu-central-1
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ecrPassword)) { throw "ECR authentication failed" }
+kubectl -n random-generator create secret docker-registry ecr-registry --docker-server=834251003876.dkr.ecr.eu-central-1.amazonaws.com --docker-username=AWS --docker-password="$ecrPassword"
+Remove-Variable ecrPassword -ErrorAction SilentlyContinue
+```
+
+**macOS Bash:**
 
 ```bash
 kubectl -n random-generator create secret docker-registry ecr-registry \
@@ -92,7 +161,7 @@ Optional: render the configuration first with `kubectl kustomize k8s-local/`. Ch
 
 Apply:
 
-```bash
+```powershell
 kubectl apply -k k8s-local/
 ```
 
@@ -100,55 +169,53 @@ Use `-k` for deployment. Workload manifests contain image aliases that Kustomize
 
 Kustomize does not wait for MySQL before starting other workloads. Initial API readiness failures can occur while the database initializes. Wait for readiness:
 
-```bash
-kubectl rollout status statefulset/db --timeout=300s
-kubectl rollout status deployment/api --timeout=300s
-kubectl rollout status deployment/frontend --timeout=300s
-kubectl rollout status deployment/prometheus --timeout=300s
-kubectl rollout status deployment/grafana --timeout=300s
-kubectl get pods,pvc
+```powershell
+kubectl -n random-generator rollout status statefulset/db --timeout=300s
+kubectl -n random-generator rollout status deployment/api --timeout=300s
+kubectl -n random-generator rollout status deployment/frontend --timeout=300s
+kubectl -n random-generator rollout status deployment/prometheus --timeout=300s
+kubectl -n random-generator rollout status deployment/grafana --timeout=300s
+kubectl -n random-generator get "pods,pvc"
 ```
 
 Expected: at least five ready pods, with `db-0` showing `2/2` Ready, and `data-db-0` Bound. If a wait fails, inspect the affected pod:
 
-```bash
-kubectl describe pod <pod-name>
-kubectl logs <pod-name>
-kubectl get events --sort-by=.lastTimestamp
+```powershell
+kubectl -n random-generator describe pod "REPLACE_WITH_POD_NAME"
+kubectl -n random-generator logs "REPLACE_WITH_POD_NAME"
+kubectl -n random-generator get events --sort-by=.lastTimestamp
 ```
 
 For `ImagePullBackOff`, check repository/tag, architecture, ECR permissions and token age. For a pending PVC, check the default StorageClass. Reapplying preserves the existing MySQL volume and history.
 
 ## 6. Inspect the deployment
 
-```bash
-kubectl get pods
-kubectl get services
-kubectl get pvc
+```powershell
+kubectl -n random-generator get pods
+kubectl -n random-generator get services
+kubectl -n random-generator get pvc
 ```
 
-Expected: at least five ready pods (API, frontend, MySQL, Prometheus, and Grafana) and a bound MySQL volume. In Rancher Desktop's Kubernetes resource view, select the **random-generator** namespace. These resources belong to the built-in Rancher cluster.
+Expected: at least five ready pods (API, frontend, MySQL, Prometheus, and Grafana) and a bound MySQL volume. In your desktop application's Kubernetes resource view, select the **random-generator** namespace.
 
 ## 7. Open the app and Grafana through Ingress
 
-**Ingress defines routing rules; Traefik receives browser traffic and forwards it to the matching Service and pods.** Rancher Desktop includes Traefik. The Ingress matches the hostname in the browser request, so both sites share HTTP port 80 while their Services remain internal. No app or Grafana terminal port-forward is needed.
+**Ingress defines routing rules; Traefik receives browser traffic and forwards it to the matching Service and pods.** Rancher supplies Traefik; Docker Desktop uses the Helm release installed in step 2. The Ingress matches the hostname in the browser request, so both sites share HTTP port 8080 on Docker Desktop (port 80 on Rancher) while their Services remain internal. No app or Grafana terminal port-forward is needed.
 
 ```text
-Browser → Traefik :80 → Ingress host rule → Service → Pod
+Browser → Traefik :8080 (Docker Desktop) / :80 (Rancher) → Ingress host rule → Service → Pod
 app.localhost         → frontend:80       → frontend → api
 grafana.localhost     → grafana:3000      → Grafana
 ```
 
-In Rancher Desktop Kubernetes settings, enable Traefik. If Rancher requests permission to bind privileged host ports, allow it so port 80 is reachable. Check the controller and routes:
+Check the routes (controller readiness was checked in step 2):
 
-```bash
-kubectl -n kube-system rollout status deployment/traefik --timeout=300s
+```powershell
 kubectl get ingressclass traefik
-kubectl -n kube-system get service traefik
-kubectl get ingress random-generator
+kubectl -n random-generator get ingress random-generator
 ```
 
-Open [the app](http://app.localhost) and [Grafana](http://grafana.localhost). Grafana login is **admin / admin**. Under **Dashboards → Random Generator**, you will find:
+On Docker Desktop, open [the app](http://app.localhost:8080) and [Grafana](http://grafana.localhost:8080). On Rancher, use the same hostnames without `:8080` and set `GF_SERVER_ROOT_URL` in `k8s-local/manifests/monitoring.yaml` to `http://grafana.localhost` before applying. Grafana login is **admin / admin**. Under **Dashboards → Random Generator**, you will find:
 
 - API Overview
 - Node.js Runtime
@@ -169,69 +236,108 @@ curl --fail --resolve grafana.localhost:80:127.0.0.1 http://grafana.localhost/ap
 
 If these work but ordinary requests do not resolve, add `127.0.0.1 app.localhost grafana.localhost` to `/etc/hosts` using an administrator editor. If your Rancher networking exposes Traefik on another reachable address, use that address instead.
 
-If port 80 is refused, check Traefik readiness and Rancher privileged-port permissions. To identify an existing Mac listener, run `lsof -nP -iTCP:80 -sTCP:LISTEN`. On Windows use `Get-NetTCPConnection -LocalPort 80 -State Listen` in PowerShell. Resolve any conflicting listener yourself; these instructions do not stop existing services. A Traefik 404 usually indicates an unmatched hostname/rule; a 503 usually indicates an unavailable backend. Inspect `kubectl describe ingress random-generator` and pod readiness.
+If port 80 is refused, check Traefik readiness and Rancher privileged-port permissions. To identify an existing Mac listener, run `lsof -nP -iTCP:80 -sTCP:LISTEN`. On Windows use `Get-NetTCPConnection -LocalPort 8080 -State Listen` in PowerShell. Resolve any conflicting listener yourself; these instructions do not stop existing services. A Traefik 404 usually indicates an unmatched hostname/rule; a 503 usually indicates an unavailable backend. Inspect `kubectl -n random-generator describe ingress random-generator` and pod readiness.
 
-### Windows / WSL ingress access (unverified)
+### Windows Docker Desktop: verify from the host first
 
-Do not assume the Mac loopback address works on Windows. Find the address published by Traefik:
+Run these in **Windows PowerShell**:
 
-```bash
-kubectl -n kube-system get service traefik -o jsonpath='{.status.loadBalancer.ingress[*].ip}'
+```powershell
+Test-NetConnection 127.0.0.1 -Port 8080
+curl.exe --fail --resolve app.localhost:8080:127.0.0.1 http://app.localhost:8080/
+curl.exe --fail --resolve grafana.localhost:8080:127.0.0.1 http://grafana.localhost:8080/api/health
 ```
 
-Select the address reachable from the Windows host. In Windows PowerShell, verify `Test-NetConnection <TRAEFIK_IP> -Port 80`, then `curl.exe --resolve app.localhost:80:<TRAEFIK_IP> http://app.localhost/`. If it is unreachable, resolve Rancher/WSL networking and firewall access before changing DNS.
+Open both URLs in a Windows browser. If explicit resolution works but ordinary hostname resolution fails, add this line using an administrator editor in `C:\Windows\System32\drivers\etc\hosts`:
 
-Using an administrator editor, add `<TRAEFIK_IP> app.localhost grafana.localhost` to `C:\Windows\System32\drivers\etc\hosts`, replacing the placeholder. Keep the same Ingress host rules and Grafana URL. WSL command-line tools may need the same mapping in their own `/etc/hosts`; Windows browsers use the Windows-side configuration. Some browsers force `.localhost` names to loopback: if the explicit-address curl check works but the browser still ignores the mapping, use `app.rancher.test` and `grafana.rancher.test` consistently in the hosts file, Ingress rules, and Grafana `GF_SERVER_ROOT_URL`, then reapply.
+```text
+127.0.0.1 app.localhost grafana.localhost
+```
 
-See [Rancher Traefik settings](https://docs.rancherdesktop.io/ui/preferences/kubernetes/) and [Rancher Windows ingress guidance](https://docs.rancherdesktop.io/1.22/tutorials/working-with-webassembly/#ingress-ip-on-windows).
+Keep the Ingress hosts and Grafana root URL unchanged. PowerShell requests and Windows browsers use Windows networking and hostname resolution. Do not use a Kubernetes ClusterIP or pod IP for Windows browsers.
+
+Troubleshoot in this order:
+
+- **Refused connection / timeout / pending LoadBalancer:** check Docker Desktop, the Traefik rollout and Service, and Windows port 8080. Use `Get-NetTCPConnection -LocalPort 8080 -State Listen | Select-Object LocalAddress,OwningProcess` in PowerShell, then `Get-Process -Id <PID>`. Inspect `docker ps` for Compose port mappings and check whether Rancher is also running. Resolve a conflicting listener deliberately; do not stop arbitrary processes or reset the cluster. Check firewall/WSL networking if the listener is healthy.
+- **Traefik 404:** check the request hostname, `ingressClassName: traefik`, and `web` entrypoint; requesting bare `localhost` does not match either route.
+- **502/503:** check ready pods and Service endpoints with `kubectl -n random-generator get endpointslices` and `kubectl -n random-generator describe ingress random-generator`.
+- **ImagePullBackOff:** check image architecture/tag, ECR permissions, and the 12-hour token expiry. A controller change cannot fix an image pull.
+
+To isolate controller routing from LoadBalancer forwarding, temporarily run in **Windows PowerShell**:
+
+```powershell
+kubectl -n traefik port-forward --address 127.0.0.1 service/traefik 18080:8080
+```
+
+In another PowerShell terminal:
+
+```powershell
+curl.exe --fail --resolve app.localhost:18080:127.0.0.1 http://app.localhost:18080/api
+curl.exe --fail --resolve grafana.localhost:18080:127.0.0.1 http://grafana.localhost:18080/api/health
+```
+
+Stop the forward with Ctrl+C. This is diagnostic only (Grafana's configured browser URL uses port 8080). Acceptance requires both Windows browser URLs working on port 8080 **without** a port-forward terminal.
 
 ### Check the app, persistence, and metrics
 
-Use the Ingress application URL:
+Use the Docker Desktop Ingress application URL below. On macOS/Rancher, use `curl` and omit `:8080`:
 
-```bash
-curl --fail http://app.localhost/
-curl --fail http://app.localhost/api
-curl --fail http://app.localhost/number
-curl --fail http://app.localhost/letter
-curl --fail http://app.localhost/rock-paper-scissors
-curl --fail http://app.localhost/history
+```powershell
+curl.exe --fail http://app.localhost:8080/
+curl.exe --fail http://app.localhost:8080/api
+curl.exe --fail http://app.localhost:8080/number
+curl.exe --fail http://app.localhost:8080/letter
+curl.exe --fail http://app.localhost:8080/rock-paper-scissors
+curl.exe --fail http://app.localhost:8080/history
 ```
 
 Note the history records. Replace the API pod, wait for recovery, and check history again:
 
-```bash
+```powershell
 kubectl -n random-generator delete pod -l app=api
 kubectl -n random-generator rollout status deployment/api --timeout=300s
-curl --fail http://app.localhost/history
+curl.exe --fail http://app.localhost:8080/history
 ```
 
 Then replace MySQL and verify the same records survive:
 
-```bash
+```powershell
 kubectl -n random-generator delete pod db-0
 kubectl -n random-generator rollout status statefulset/db --timeout=300s
 kubectl -n random-generator rollout status deployment/api --timeout=300s
-curl --fail http://app.localhost/history
+curl.exe --fail http://app.localhost:8080/history
 ```
 
 Pod replacement causes a brief interruption because there is one database replica and the API can scale down to one replica. Allow recovery if the endpoint initially returns 503; inspect the pods if it persists. MySQL history survives pod replacement through its PVC. The previous deployment's data is not copied into this database.
 
 Generate requests and allow at least two Prometheus scrapes for Grafana's charts. To inspect scrape health directly, run a temporary forward in another terminal:
 
-```bash
+```powershell
 kubectl -n random-generator port-forward --address 127.0.0.1 service/prometheus 9090:9090
 ```
 
 Open `http://localhost:9090/targets`; `random-generator-api` and `mysql` should be UP. In Prometheus, query `mysql_up{job="mysql"}` and confirm it equals `1`. An UP scrape alone does not prove MySQL authentication succeeds. Check all four added dashboards after generating traffic and allowing several scrapes.
 
-The exporter is the second container in `db-0`. It connects to `127.0.0.1:3306` as root using `MYSQL_ROOT_PASSWORD` from the existing `database` Secret. Its HTTP probes check the exporter listener, not MySQL collection. For failures, use `kubectl logs db-0 -c mysql-exporter` and `kubectl logs db-0 -c mysql`. Keep the Secret password matched to the existing database; no new user or database reset is required.
+The exporter is the second container in `db-0`. It connects to `127.0.0.1:3306` as root using `MYSQL_ROOT_PASSWORD` from the existing `database` Secret. Its HTTP probes check the exporter listener, not MySQL collection. For failures, use `kubectl -n random-generator logs db-0 -c mysql-exporter` and `kubectl -n random-generator logs db-0 -c mysql`. Keep the Secret password matched to the existing database; no new user or database reset is required.
 
 Re-run `kubectl apply -k k8s-local/` and confirm history remains. Prometheus and Grafana storage is temporary, so their history and manual UI changes may disappear after a restart.
 
 ## 8. Deploy a newly published latest image
 
 If the ECR token has expired, refresh the existing Secret:
+
+**Windows PowerShell:**
+
+```powershell
+$ecrPassword = aws ecr get-login-password --region eu-central-1
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ecrPassword)) { throw "ECR authentication failed" }
+$secretYaml = kubectl -n random-generator create secret docker-registry ecr-registry --docker-server=834251003876.dkr.ecr.eu-central-1.amazonaws.com --docker-username=AWS --docker-password="$ecrPassword" --dry-run=client -o yaml
+if ($LASTEXITCODE -ne 0) { throw "Could not generate ECR Secret" }
+$secretYaml | kubectl -n random-generator apply -f -
+Remove-Variable ecrPassword -ErrorAction SilentlyContinue
+```
+
+**macOS Bash:**
 
 ```bash
 kubectl -n random-generator create secret docker-registry ecr-registry \
@@ -244,13 +350,13 @@ kubectl -n random-generator create secret docker-registry ecr-registry \
 
 To change an image repository or tag, edit `newName` or `newTag` in `k8s-local/kustomization.yaml`, then apply:
 
-```bash
+```powershell
 kubectl apply -k k8s-local/
 ```
 
 If you published new images under the same `latest` tag, restart both application Deployments:
 
-```bash
+```powershell
 kubectl -n random-generator rollout restart deployment/api deployment/frontend
 kubectl -n random-generator rollout status deployment/api --timeout=300s
 kubectl -n random-generator rollout status deployment/frontend --timeout=300s
@@ -262,33 +368,66 @@ If monitoring files change, run `kubectl apply -k k8s-local/` again. Kustomize a
 
 ## 9. Remove the application — destructive
 
-**Only run this when you want to delete the application and all database history in the `random-generator` namespace.** It deletes the namespace and its PVC; the normal local storage provisioner removes the associated data. Rancher Desktop's Kubernetes cluster remains running.
+**Only run this when you want to delete the application and all database history in the `random-generator` namespace.** It deletes the namespace and its PVC; the normal local storage provisioner removes the associated data. The local Kubernetes cluster and ingress controller remain running.
 
-```bash
+```powershell
 kubectl delete namespace random-generator --wait=true --timeout=300s
 ```
 
-Stop any port-forward terminals with Ctrl+C. This cleanup does not remove the previously created separate cluster or any AWS resources.
+Stop port-forward terminals with Ctrl+C. This cleanup does not remove any cluster or AWS resources. If the Docker Desktop controller is no longer needed by any application, remove that Helm release separately:
+
+```powershell
+helm uninstall traefik --namespace traefik
+```
+
+This removes shared ingress access and is not part of normal application cleanup. Do not run it against Rancher's bundled controller.
 
 ## API Horizontal Pod Autoscaler (HPA)
 
 Kustomize now includes an `autoscaling/v2` HPA named `api`. It scales only Deployment `api`, from **1 to 5 replicas**, targeting **70% average CPU utilization**. With a 250m CPU request per API pod, that target is approximately **175m per pod**. CPU requests and limits remain unchanged. Frontend, MySQL, Prometheus, and Grafana remain fixed at one replica.
 
-The HPA reads the Kubernetes resource metrics API (metrics-server), not Prometheus. Check prerequisites and apply from the repository root:
+### Prepare the resource metrics API
 
-```bash
-kubectl top pods --containers
-kubectl apply -k k8s-local/
-kubectl get hpa api
-kubectl describe hpa api
+The HPA requires metrics-server; Prometheus does not supply this API. Check before installing anything:
+
+```powershell
+kubectl get apiservice v1beta1.metrics.k8s.io
+kubectl -n kube-system get deployment metrics-server
+kubectl top nodes
 ```
 
-An initially unknown CPU target can occur until metrics arrive. If it persists, inspect HPA conditions and metrics-server. Refresh the ECR pull Secret using step 8 if its token has expired: newly created API pods must pull the private image. Pending pods can indicate insufficient CPU/memory on the single Rancher node. Five API replicas request 1.25 CPUs and 2.5 GiB memory in total, in addition to the other workloads. HPA adds pods, not nodes or laptop resources.
+If an existing installation is unhealthy, inspect its logs and APIService rather than installing a duplicate. Rancher normally supplies metrics-server. If **absent on Docker Desktop**, install pinned **v0.9.1**, requiring Kubernetes **1.34+**, per the [upstream compatibility matrix](https://github.com/kubernetes-sigs/metrics-server/tree/v0.9.1#compatibility-matrix). For older servers choose a supported pinned release from that matrix before applying; do not upgrade/reset a cluster implicitly.
 
-Watch autoscaling in one terminal and run a five-minute load in another:
+```powershell
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.1/components.yaml
+kubectl -n kube-system rollout status deployment/metrics-server --timeout=300s
+kubectl wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=180s
+kubectl top nodes
+```
 
-```bash
-kubectl get hpa api -w
+If readiness fails, inspect `kubectl -n kube-system logs deployment/metrics-server` and `kubectl describe apiservice v1beta1.metrics.k8s.io`. Only for a **confirmed kubelet serving-certificate validation error** on this local development cluster, edit the Deployment:
+
+```powershell
+kubectl -n kube-system edit deployment metrics-server
+```
+
+Append `--kubelet-insecure-tls` to the existing metrics-server container `args` without replacing its other arguments. This disables kubelet certificate validation and is for local testing only; do not use it for unrelated network failures or production. Repeat the rollout/APIService/top checks afterwards. Allow several collection cycles before checking HPA CPU values.
+
+The HPA reads the Kubernetes resource metrics API (metrics-server), not Prometheus. Check prerequisites and apply from the repository root:
+
+```powershell
+kubectl -n random-generator top pods --containers
+kubectl apply -k k8s-local/
+kubectl -n random-generator get hpa api
+kubectl -n random-generator describe hpa api
+```
+
+An initially unknown CPU target can occur until metrics arrive. If it persists, inspect HPA conditions and metrics-server. Refresh the ECR pull Secret using step 8 if its token has expired: newly created API pods must pull the private image. Pending pods can indicate insufficient CPU/memory on the local cluster. Five API replicas request 1.25 CPUs and 2.5 GiB memory in total, in addition to the other workloads. HPA adds pods, not nodes or laptop resources.
+
+Watch autoscaling in one PowerShell or Bash terminal. The optional five-minute load command below requires a separate Bash terminal:
+
+```powershell
+kubectl -n random-generator get hpa api -w
 ```
 
 ```bash
@@ -297,10 +436,10 @@ bash k8s-local/load-test.sh 100 300
 
 Inspect pod count and CPU as needed:
 
-```bash
-kubectl get pods -l app=api
-kubectl top pods --containers
-kubectl describe hpa api
+```powershell
+kubectl -n random-generator get pods -l app=api
+kubectl -n random-generator top pods --containers
+kubectl -n random-generator describe hpa api
 ```
 
 When sustained CPU is above target, expect the desired replica count to rise, up to five. Scale-up allows at most two added pods per 60 seconds. After stopping traffic, scale-down keeps a 120-second stabilization window and removes at most one pod per 60 seconds toward the minimum of one. These are policy limits, not exact timing guarantees; controller sampling and readiness also affect timing.
@@ -309,9 +448,9 @@ Verify HPA conditions show valid metrics and scaling activity, new API pods beco
 
 The API manifest intentionally omits `spec.replicas` so later applies do not override HPA decisions. The first apply removing the previously managed replica field can temporarily default it to one; the HPA then controls the count. Reapply once scaling is stable and verify it does not reset replicas.
 
-## Load test and observe API autoscaling
+## Optional Bash load test and autoscaling observation
 
-Run from the repository root. This script needs Bash, curl, and standard shell utilities; it does not use Kubernetes credentials or change replicas. It works with macOS Bash and WSL Bash.
+The existing `load-test.sh` is a Bash script, not a PowerShell script. The commands in this optional section must run in a Bash terminal (macOS, or Git Bash installed separately on Windows), from the repository root. It needs curl and standard shell utilities and does not use Kubernetes credentials or change replicas. Windows deployment, HTTP checks, and HPA inspection above require no Bash. Git Bash load-test behavior has not been validated.
 
 Start with 50 concurrent workers for two minutes:
 
@@ -328,7 +467,7 @@ bash k8s-local/load-test.sh 200 300
 
 Run one load test at a time. Each worker sends one request at a time with no pause. The script stops after the selected duration; Ctrl+C terminates its workers and in-flight requests. Reports every five seconds show cumulative completed requests/second, successes, HTTP errors, network/timeouts, mean latency, and maximum latency. In-flight requests cancelled by Ctrl+C are excluded. A final summary is printed and temporary result files are removed. Limits are 200 workers and 1800 seconds.
 
-Arguments: `workers seconds mode base-url`. The default target is `http://app.localhost`.
+Arguments: `workers seconds mode base-url`. The default target is `http://app.localhost` for Rancher. For Docker Desktop, pass port 8080 explicitly, for example `bash k8s-local/load-test.sh 50 120 api http://app.localhost:8080`; use the same fourth argument for `mixed` or `history` mode.
 
 | Mode | Requests | Purpose |
 | --- | --- |
@@ -343,22 +482,24 @@ bash k8s-local/load-test.sh 50 120 history
 
 While it runs, use another terminal:
 
-```bash
-kubectl get pods -w
+```powershell
+kubectl -n random-generator get pods -w
 ```
 
 If the cluster metrics API is available, inspect container CPU:
 
-```bash
-kubectl top pods --containers
+```powershell
+kubectl -n random-generator top pods --containers
 ```
 
 If `kubectl top` reports metrics unavailable, the HPA cannot calculate CPU utilization. Check `kubectl -n kube-system get deployment metrics-server` and `kubectl -n kube-system logs deployment/metrics-server`; resolve the cluster metrics API before expecting scaling. Prometheus and Grafana do not provide this HPA metric. Watch API latency, errors, request rate, and CPU. Try browsing the app while the load runs. Stop with Ctrl+C and observe recovery.
 
-This generates real load; it does not deliberately freeze a process. Saturation is not guaranteed: the API endpoint is inexpensive, and the client, Ingress, or frontend can bottleneck before the API. These curl workers also consume resources on the same Mac as Rancher Desktop. Mixed/history modes can bottleneck on the single MySQL pod, which adding API replicas will not fix. Confirm API CPU is the bottleneck and compare identical load parameters against your previous single-pod baseline. The load script does not modify the HPA.
+This generates real load; it does not deliberately freeze a process. Saturation is not guaranteed: the API endpoint is inexpensive, and the client, Ingress, or frontend can bottleneck before the API. These curl workers also consume resources on the same computer as the cluster. Mixed/history modes can bottleneck on the single MySQL pod, which adding API replicas will not fix. Confirm API CPU is the bottleneck and compare identical load parameters against your previous single-pod baseline. The load script does not modify the HPA.
 
 The script has been reviewed as a file but has not been executed or benchmarked on your Mac.
 
 ## Validation status
 
-This revision is **untested at runtime**. Repository files were edited and Git commands were used for the requested commit; no cluster commands, load tests, image inspection, deployment, or cleanup were performed on your Mac. Run the checks above yourself, including architecture compatibility and Windows/WSL behavior where applicable. Existing test results from other deployment methods do not validate this revision.
+Windows cluster preflight confirmed a Ready AMD64 Docker Desktop node on Kubernetes 1.36.1 and a default StorageClass. Initial Kustomize and Helm rendering passed. During troubleshooting, the app page and Grafana health endpoint returned HTTP 200 through a temporary controller port-forward. Docker Desktop's LoadBalancer could not bind the occupied host port 80. After changing the exposed Service port and Grafana root URL to 8080, the user confirmed the setup works.
+
+The Ingress host rules and backend Service ports remain unchanged. Persistence and HPA/load behavior have not been verified in this session. macOS/Rancher runtime behavior has not been revalidated in this revision.
