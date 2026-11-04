@@ -1,0 +1,41 @@
+# Docker Desktop only; install separately with Traefik Helm chart 42.3.0.
+# Rancher Desktop uses its bundled controller instead.
+deployment:
+  replicas: 1
+
+ingressClass:
+  enabled: true
+  name: traefik
+  isDefaultClass: false
+
+providers:
+  kubernetesIngress:
+    enabled: true
+    ingressClass: traefik
+    publishedService:
+      enabled: true
+  kubernetesCRD:
+    enabled: false
+  kubernetesGateway:
+    enabled: false
+
+api:
+  dashboard: false
+ingressRoute:
+  dashboard:
+    enabled: false
+
+service:
+  type: LoadBalancer
+
+ports:
+  traefik:
+    expose:
+      default: false
+  web:
+    exposedPort: 8080
+    expose:
+      default: true
+  websecure:
+    expose:
+      default: false
